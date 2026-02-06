@@ -9,6 +9,7 @@ import { protect } from "./middlewares/authMiddleware.js";
 import projectRouter from "./routes/projectRoutes.js";
 import taskRouter from "./routes/taskRoutes.js";
 import commentRouter from "./routes/commentRoutes.js";
+import { initializeDatabase } from "./configs/prisma.js";
 
 const app = express();
 
@@ -29,8 +30,16 @@ app.use("/api/comments", protect, commentRouter);
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () =>
-  console.log(
-    `Server is running on port ${PORT} => http://localhost:${PORT} 🚀`
-  )
-);
+// Initialize database on server start
+initializeDatabase()
+  .then(() => {
+    app.listen(PORT, () =>
+      console.log(
+        `Server is running on port ${PORT} => http://localhost:${PORT} 🚀`
+      )
+    );
+  })
+  .catch((error) => {
+    console.error("Failed to initialize database:", error);
+    process.exit(1);
+  });
