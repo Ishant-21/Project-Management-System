@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { format } from "date-fns";
-import { useAuth } from "@clerk/clerk-react";
+import { useAuth } from "../lib/auth";
 import api from "../configs/api";
 import toast from "react-hot-toast";
 import { addTask } from "../features/workspaceSlice";

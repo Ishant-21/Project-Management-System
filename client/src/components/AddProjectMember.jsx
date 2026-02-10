@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Mail, UserPlus } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { useSearchParams } from "react-router-dom";
-import { useAuth } from "@clerk/clerk-react";
+import { useAuth } from "../lib/auth";
 import api from "../configs/api";
 import toast from "react-hot-toast";
 import { fetchWorkspaces } from "../features/workspaceSlice";

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { ArrowRight, Clock, AlertTriangle, User } from "lucide-react";
 import { useSelector } from "react-redux";
-import { useUser } from "@clerk/clerk-react";
+import { useUser } from "../lib/auth";
 
 export default function TasksSummary() {
   const { currentWorkspace } = useSelector((state) => state.workspace);

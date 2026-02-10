@@ -3,7 +3,7 @@ import { XIcon } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import toast from "react-hot-toast";
 import api from "../configs/api";
-import { useAuth } from "@clerk/clerk-react";
+import { useAuth } from "../lib/auth";
 import { addProject } from "../features/workspaceSlice";
 
 const CreateProjectDialog = ({ isDialogOpen, setIsDialogOpen }) => {

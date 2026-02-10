@@ -5,12 +5,9 @@ import { Outlet } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { loadTheme } from "../features/themeSlice";
 import { Loader2Icon } from "lucide-react";
-import {
-  useUser,
-  SignIn,
-  useAuth,
-  CreateOrganization,
-} from "@clerk/clerk-react";
+import { useUser, useAuth } from "../lib/auth";
+import SignIn from "./SignIn";
+import CreateOrganization from "../components/CreateOrganization";
 import { fetchWorkspaces } from "../features/workspaceSlice";
 
 const Layout = () => {

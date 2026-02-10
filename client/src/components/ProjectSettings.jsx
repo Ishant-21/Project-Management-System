@@ -3,7 +3,7 @@ import { Plus, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 import AddProjectMember from "./AddProjectMember";
 import { useDispatch } from "react-redux";
-import { useAuth } from "@clerk/clerk-react";
+import { useAuth } from "../lib/auth";
 import toast from "react-hot-toast";
 import api from "../configs/api";
 import { fetchWorkspaces } from "../features/workspaceSlice";

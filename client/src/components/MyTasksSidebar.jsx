@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { useSelector } from "react-redux";
 import { Link } from "react-router-dom";
-import { useUser } from "@clerk/clerk-react";
+import { useUser } from "../lib/auth";
 
 function MyTasksSidebar() {
   const { user } = useUser();

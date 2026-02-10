@@ -1,4 +1,5 @@
 import prisma from "../configs/prisma.js";
+import crypto from "crypto";
 
 // Get all workspaces for user
 export const getUserWorkspaces = async (req, res) => {
@@ -30,6 +31,51 @@ export const getUserWorkspaces = async (req, res) => {
     });
 
     res.json({ workspaces });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: error.code || error.message });
+  }
+};
+
+// Create a new workspace and add the creator as ADMIN
+export const createWorkspace = async (req, res) => {
+  try {
+    const { userId } = await req.auth();
+    const { name, description } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ message: "Workspace name is required" });
+    }
+
+    const id = crypto.randomUUID();
+    const slugBase = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    const slug = `${slugBase}-${id.slice(0, 8)}`;
+
+    const workspace = await prisma.workspace.create({
+      data: {
+        id,
+        name,
+        slug,
+        description: description || "",
+        ownerId: userId,
+      },
+    });
+
+    // add creator as admin member
+    await prisma.workspaceMember.create({
+      data: {
+        userId,
+        workspaceId: id,
+        role: "ADMIN",
+      },
+    });
+
+    const ws = await prisma.workspace.findUnique({
+      where: { id },
+      include: { members: { include: { user: true } }, owner: true },
+    });
+
+    res.json({ workspace: ws, message: "Workspace created" });
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: error.code || error.message });
@@ -72,7 +118,7 @@ export const addMember = async (req, res) => {
     // Check creator has admin role
     if (
       !workspace.members.find(
-        (member) => member.userId === userId && role === "ADMIN"
+        (member) => member.userId === userId && member.role === "ADMIN"
       )
     ) {
       return res

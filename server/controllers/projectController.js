@@ -187,7 +187,7 @@ export const addMember = async (req, res) => {
 
     // Check if user is already a member
     const existingMember = project.members.find(
-      (member) => member.email === email
+      (member) => member.user?.email === email
     );
 
     if (existingMember) {

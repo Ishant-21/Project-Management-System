@@ -9,7 +9,7 @@ import {
   SettingsIcon,
   UsersIcon,
 } from "lucide-react";
-import { useClerk } from "@clerk/clerk-react";
+import { useClerk } from "../lib/auth";
 
 const Sidebar = ({ isSidebarOpen, setIsSidebarOpen }) => {
   const { openUserProfile } = useClerk();

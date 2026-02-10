@@ -4,7 +4,7 @@ import { useSelector } from "react-redux";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { CalendarIcon, MessageCircle, PenIcon } from "lucide-react";
-import { useAuth, useUser } from "@clerk/clerk-react";
+import { useAuth, useUser } from "../lib/auth";
 import api from "../configs/api";
 
 const TaskDetails = () => {

@@ -14,7 +14,7 @@ import {
   XIcon,
   Zap,
 } from "lucide-react";
-import { useAuth } from "@clerk/clerk-react";
+import { useAuth } from "../lib/auth";
 import api from "../configs/api";
 
 const typeIcons = {
