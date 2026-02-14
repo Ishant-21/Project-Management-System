@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Mail, UserPlus } from "lucide-react";
 import { useSelector } from "react-redux";
 import { useOrganization } from "../lib/auth";
+import { useUser } from "../lib/auth";
 import toast from "react-hot-toast";
 
 const InviteMemberDialog = ({ isDialogOpen, setIsDialogOpen }) => {
@@ -9,6 +10,10 @@ const InviteMemberDialog = ({ isDialogOpen, setIsDialogOpen }) => {
 
   const currentWorkspace = useSelector(
     (state) => state.workspace?.currentWorkspace || null
+  );
+  const { user } = useUser();
+  const isAdmin = currentWorkspace?.members?.some(
+    (m) => ((m.userId === user?.id) || (m.user && m.user.id === user?.id)) && m.role === "ADMIN"
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
@@ -26,7 +31,7 @@ const InviteMemberDialog = ({ isDialogOpen, setIsDialogOpen }) => {
         role: formData.role,
       });
 
-      toast.success("Invitation sent successfully");
+      toast.success("Added successfully");
       setIsDialogOpen(false);
     } catch (error) {
       console.log(error);
@@ -45,11 +50,11 @@ const InviteMemberDialog = ({ isDialogOpen, setIsDialogOpen }) => {
         <div className="mb-4">
           <h2 className="text-xl font-bold flex items-center gap-2">
             <UserPlus className="size-5 text-zinc-900 dark:text-zinc-200" />{" "}
-            Invite Team Member
+            Add Team Member
           </h2>
           {currentWorkspace && (
             <p className="text-sm text-zinc-700 dark:text-zinc-400">
-              Inviting to workspace:{" "}
+              Adding to workspace:{" "}
               <span className="text-blue-600 dark:text-blue-400">
                 {currentWorkspace.name}
               </span>
@@ -110,10 +115,15 @@ const InviteMemberDialog = ({ isDialogOpen, setIsDialogOpen }) => {
             </button>
             <button
               type="submit"
-              disabled={isSubmitting || !currentWorkspace}
-              className="px-5 py-2 rounded text-sm bg-gradient-to-br from-blue-500 to-blue-600 text-white disabled:opacity-50 hover:opacity-90 transition"
+              disabled={isSubmitting || !currentWorkspace || !isAdmin}
+              title={!isAdmin ? "Only workspace admins can invite members" : undefined}
+              className={`px-5 py-2 rounded text-sm disabled:opacity-50 transition ${
+                isAdmin
+                  ? "bg-gradient-to-br from-blue-500 to-blue-600 text-white hover:opacity-90"
+                  : "bg-zinc-200 text-zinc-500 cursor-not-allowed"
+              }`}
             >
-              {isSubmitting ? "Sending..." : "Send Invitation"}
+              {isSubmitting ? "Adding..." : "Add"}
             </button>
           </div>
         </form>

@@ -6,6 +6,7 @@ import { useAuth } from "../lib/auth";
 import api from "../configs/api";
 import toast from "react-hot-toast";
 import { addTask } from "../features/workspaceSlice";
+import { useUser } from "../lib/auth";
 
 export default function CreateTaskDialog({
   showCreateTask,
@@ -20,6 +21,8 @@ export default function CreateTaskDialog({
   );
   const project = currentWorkspace?.projects.find((p) => p.id === projectId);
   const teamMembers = project?.members || [];
+  const { user } = useUser();
+  const isLead = project?.team_lead === user?.id;
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
@@ -85,6 +88,12 @@ export default function CreateTaskDialog({
             />
           </div>
 
+          {!isLead && (
+            <div className="text-sm text-zinc-600 dark:text-zinc-400 p-2 bg-zinc-50 dark:bg-zinc-900 rounded">
+              Only the project lead can create and assign tasks.
+            </div>
+          )}
+
           {/* Description */}
           <div className="space-y-1">
             <label htmlFor="description" className="text-sm font-medium">
@@ -144,7 +153,9 @@ export default function CreateTaskDialog({
                 onChange={(e) =>
                   setFormData({ ...formData, assigneeId: e.target.value })
                 }
-                className="w-full rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm mt-1"
+                disabled={!isLead}
+                title={!isLead ? "Only project lead can assign tasks" : undefined}
+                className="w-full rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm mt-1 disabled:opacity-50"
               >
                 <option value="">Unassigned</option>
                 {teamMembers.map((member) => (
@@ -204,8 +215,13 @@ export default function CreateTaskDialog({
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
-              className="rounded px-5 py-2 text-sm bg-gradient-to-br from-blue-500 to-blue-600 hover:opacity-90 text-white dark:text-zinc-200 transition"
+              disabled={isSubmitting || !isLead}
+              title={!isLead ? "Only project lead can create tasks" : undefined}
+              className={`rounded px-5 py-2 text-sm transition ${
+                isLead
+                  ? "bg-gradient-to-br from-blue-500 to-blue-600 hover:opacity-90 text-white dark:text-zinc-200"
+                  : "bg-zinc-200 text-zinc-500 cursor-not-allowed"
+              }`}
             >
               {isSubmitting ? "Creating..." : "Create Task"}
             </button>

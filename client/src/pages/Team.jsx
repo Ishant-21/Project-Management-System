@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { UsersIcon, Search, UserPlus, Shield, Activity } from "lucide-react";
 import InviteMemberDialog from "../components/InviteMemberDialog";
+import { useUser } from "../lib/auth";
 import { useSelector } from "react-redux";
 
 const Team = () => {
@@ -10,6 +11,10 @@ const Team = () => {
   const [users, setUsers] = useState([]);
   const currentWorkspace = useSelector(
     (state) => state?.workspace?.currentWorkspace || null
+  );
+  const { user } = useUser();
+  const isAdmin = currentWorkspace?.members?.some(
+    (m) => ((m.userId === user?.id) || (m.user && m.user.id === user?.id)) && m.role === "ADMIN"
   );
   const projects = currentWorkspace?.projects || [];
 
@@ -42,10 +47,16 @@ const Team = () => {
           </p>
         </div>
         <button
-          onClick={() => setIsDialogOpen(true)}
-          className="flex items-center px-5 py-2 rounded text-sm bg-gradient-to-br from-blue-500 to-blue-600 hover:opacity-90 text-white transition"
+          onClick={() => isAdmin && setIsDialogOpen(true)}
+          disabled={!isAdmin}
+          title={!isAdmin ? "Only workspace admins can invite members" : "Invite Member"}
+          className={`flex items-center px-5 py-2 rounded text-sm transition ${
+            isAdmin
+              ? "bg-gradient-to-br from-blue-500 to-blue-600 text-white hover:opacity-90"
+              : "bg-zinc-200 text-zinc-500 cursor-not-allowed"
+          }`}
         >
-          <UserPlus className="w-4 h-4 mr-2" /> Invite Member
+          <UserPlus className="w-4 h-4 mr-2" /> Add Member
         </button>
         <InviteMemberDialog
           isDialogOpen={isDialogOpen}
@@ -166,7 +177,7 @@ const Team = () => {
                     >
                       <td className="px-6 py-2.5 whitespace-nowrap flex items-center gap-3">
                         <img
-                          src={user.user.image}
+                          src={user.user.image || "/profile.svg"}
                           alt={user.user.name}
                           className="size-7 rounded-full bg-gray-200 dark:bg-zinc-800"
                         />
@@ -203,7 +214,7 @@ const Team = () => {
                 >
                   <div className="flex items-center gap-3 mb-2">
                     <img
-                      src={user.user.image}
+                      src={user.user.image || "/profile.svg"}
                       alt={user.user.name}
                       className="size-9 rounded-full bg-gray-200 dark:bg-zinc-800"
                     />

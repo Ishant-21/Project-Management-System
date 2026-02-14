@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { CalendarIcon, MessageCircle, PenIcon } from "lucide-react";
 import { useAuth, useUser } from "../lib/auth";
+import useVisibleProjects from "../hooks/useVisibleProjects";
 import api from "../configs/api";
 
 const TaskDetails = () => {
@@ -21,6 +22,7 @@ const TaskDetails = () => {
   const [loading, setLoading] = useState(true);
 
   const { currentWorkspace } = useSelector((state) => state.workspace);
+  const visibleProjects = useVisibleProjects();
 
   const fetchComments = async () => {
     if (!taskId) return;
@@ -41,7 +43,7 @@ const TaskDetails = () => {
     setLoading(true);
     if (!projectId || !taskId) return;
 
-    const proj = currentWorkspace.projects.find((p) => p.id === projectId);
+    const proj = (visibleProjects || []).find((p) => p.id === projectId);
     if (!proj) return;
 
     const tsk = proj.tasks.find((t) => t.id === taskId);
@@ -123,7 +125,7 @@ const TaskDetails = () => {
                   >
                     <div className="flex items-center gap-2 mb-1 text-sm text-gray-500 dark:text-zinc-400">
                       <img
-                        src={comment.user.image}
+                        src={comment.user.image || "/profile.svg"}
                         alt="avatar"
                         className="size-5 rounded-full"
                       />
@@ -202,7 +204,7 @@ const TaskDetails = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-gray-700 dark:text-zinc-300">
             <div className="flex items-center gap-2">
               <img
-                src={task.assignee?.image}
+                src={task.assignee?.image || "/profile.svg"}
                 className="size-5 rounded-full"
                 alt="avatar"
               />

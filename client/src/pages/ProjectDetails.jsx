@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useUser } from "../lib/auth";
 import { useSelector } from "react-redux";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -30,6 +31,7 @@ export default function ProjectDetail() {
   const [tasks, setTasks] = useState([]);
   const [showCreateTask, setShowCreateTask] = useState(false);
   const [activeTab, setActiveTab] = useState(tab || "tasks");
+  const { user } = useUser();
 
   useEffect(() => {
     if (tab) setActiveTab(tab);
@@ -90,8 +92,14 @@ export default function ProjectDetail() {
           </div>
         </div>
         <button
-          onClick={() => setShowCreateTask(true)}
-          className="flex items-center gap-2 px-5 py-2 text-sm rounded bg-gradient-to-br from-blue-500 to-blue-600 text-white"
+          onClick={() => project?.team_lead === user?.id && setShowCreateTask(true)}
+          disabled={project?.team_lead !== user?.id}
+          title={project?.team_lead !== user?.id ? "Only project lead can create tasks" : "Create Task"}
+          className={`flex items-center gap-2 px-5 py-2 text-sm rounded transition ${
+            project?.team_lead === user?.id
+              ? "bg-gradient-to-br from-blue-500 to-blue-600 text-white"
+              : "bg-zinc-200 text-zinc-500 cursor-not-allowed"
+          }`}
         >
           <PlusIcon className="size-4" />
           New Task

@@ -1,12 +1,18 @@
 import { useState, useEffect } from "react";
 import { useSelector } from "react-redux";
+import { useUser } from "../lib/auth";
+import useVisibleProjects from "../hooks/useVisibleProjects";
 import { Plus, Search, FolderOpen } from "lucide-react";
 import ProjectCard from "../components/ProjectCard";
 import CreateProjectDialog from "../components/CreateProjectDialog";
 
 export default function Projects() {
-  const projects = useSelector(
-    (state) => state?.workspace?.currentWorkspace?.projects || []
+  const projects = useVisibleProjects();
+  const { user } = useUser();
+
+  const currentWorkspace = useSelector((state) => state.workspace.currentWorkspace);
+  const isAdmin = currentWorkspace?.members?.some(
+    (m) => ((m.userId === user?.id) || (m.user && m.user.id === user?.id)) && m.role === "ADMIN"
   );
 
   const [filteredProjects, setFilteredProjects] = useState([]);
@@ -62,8 +68,14 @@ export default function Projects() {
           </p>
         </div>
         <button
-          onClick={() => setIsDialogOpen(true)}
-          className="flex items-center px-5 py-2 text-sm rounded bg-gradient-to-br from-blue-500 to-blue-600 text-white hover:opacity-90 transition"
+          onClick={() => isAdmin && setIsDialogOpen(true)}
+          disabled={!isAdmin}
+          className={`flex items-center px-5 py-2 text-sm rounded ${
+            isAdmin
+              ? "bg-gradient-to-br from-blue-500 to-blue-600 text-white hover:opacity-90"
+              : "bg-zinc-200 text-zinc-500 cursor-not-allowed"
+          } transition`}
+          title={!isAdmin ? "Only workspace admins can create projects" : "Create new project"}
         >
           <Plus className="size-4 mr-2" /> New Project
         </button>
@@ -122,8 +134,14 @@ export default function Projects() {
               Create your first project to get started
             </p>
             <button
-              onClick={() => setIsDialogOpen(true)}
-              className="flex items-center gap-1.5 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded mx-auto text-sm"
+              onClick={() => isAdmin && setIsDialogOpen(true)}
+              disabled={!isAdmin}
+              title={!isAdmin ? "Only workspace admins can create projects" : "Create project"}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded mx-auto text-sm transition ${
+                isAdmin
+                  ? "bg-blue-500 hover:bg-blue-600 text-white"
+                  : "bg-zinc-200 text-zinc-500 cursor-not-allowed"
+              }`}
             >
               <Plus className="size-4" />
               Create Project

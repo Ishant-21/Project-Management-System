@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ArrowRight, Calendar, UsersIcon, FolderOpen } from "lucide-react";
 import { format } from "date-fns";
 import { useSelector } from "react-redux";
+import { useUser } from "../lib/auth";
 import CreateProjectDialog from "./CreateProjectDialog";
 
 const ProjectOverview = () => {
@@ -33,6 +34,11 @@ const ProjectOverview = () => {
     setProjects(currentWorkspace?.projects || []);
   }, [currentWorkspace]);
 
+  const { user } = useUser();
+  const isAdmin = currentWorkspace?.members?.some(
+    (m) => ((m.userId === user?.id) || (m.user && m.user.id === user?.id)) && m.role === "ADMIN"
+  );
+
   return (
     currentWorkspace && (
       <div className="bg-white dark:bg-zinc-950 dark:bg-gradient-to-br dark:from-zinc-800/70 dark:to-zinc-900/50 border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all duration-200 rounded-lg overflow-hidden">
@@ -58,8 +64,14 @@ const ProjectOverview = () => {
                 No projects yet
               </p>
               <button
-                onClick={() => setIsDialogOpen(true)}
-                className="mt-4 px-4 py-2 text-sm bg-gradient-to-br from-blue-500 to-blue-600 text-white dark:text-zinc-200 rounded hover:opacity-90 transition"
+                onClick={() => isAdmin && setIsDialogOpen(true)}
+                disabled={!isAdmin}
+                title={!isAdmin ? "Only workspace admins can create projects" : "Create your First Project"}
+                className={`mt-4 px-4 py-2 text-sm rounded transition ${
+                  isAdmin
+                    ? "bg-gradient-to-br from-blue-500 to-blue-600 text-white dark:text-zinc-200 hover:opacity-90"
+                    : "bg-zinc-200 text-zinc-500 cursor-not-allowed"
+                }`}
               >
                 Create your First Project
               </button>

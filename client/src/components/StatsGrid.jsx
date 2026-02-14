@@ -1,11 +1,13 @@
 import { FolderOpen, CheckCircle, Users, AlertTriangle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
+import useVisibleProjects from "../hooks/useVisibleProjects";
 
 export default function StatsGrid() {
   const currentWorkspace = useSelector(
     (state) => state?.workspace?.currentWorkspace || null
   );
+  const visibleProjects = useVisibleProjects();
 
   const [stats, setStats] = useState({
     totalProjects: 0,
@@ -52,25 +54,23 @@ export default function StatsGrid() {
 
   useEffect(() => {
     if (currentWorkspace) {
+      const projects = visibleProjects || [];
       setStats({
-        totalProjects: currentWorkspace.projects.length,
-        activeProjects: currentWorkspace.projects.filter(
+        totalProjects: projects.length,
+        activeProjects: projects.filter(
           (p) => p.status !== "CANCELLED" && p.status !== "COMPLETED"
         ).length,
-        completedProjects: currentWorkspace.projects
+        completedProjects: projects
           .filter((p) => p.status === "COMPLETED")
           .reduce((acc, project) => acc + project.tasks.length, 0),
-        myTasks: currentWorkspace.projects.reduce(
+        myTasks: projects.reduce(
           (acc, project) =>
             acc +
-            project.tasks.filter(
-              (t) => t.assignee?.email === currentWorkspace.owner.email
-            ).length,
+            project.tasks.filter((t) => t.assignee?.email === currentWorkspace.owner.email).length,
           0
         ),
-        overdueIssues: currentWorkspace.projects.reduce(
-          (acc, project) =>
-            acc + project.tasks.filter((t) => t.due_date < new Date()).length,
+        overdueIssues: projects.reduce(
+          (acc, project) => acc + project.tasks.filter((t) => t.due_date < new Date()).length,
           0
         ),
       });

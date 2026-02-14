@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { useSelector } from "react-redux";
+import useVisibleProjects from "../hooks/useVisibleProjects";
 
 const typeIcons = {
   BUG: { icon: Bug, color: "text-red-500 dark:text-red-400" },
@@ -31,11 +32,12 @@ const statusColors = {
 const RecentActivity = () => {
   const [tasks, setTasks] = useState([]);
   const { currentWorkspace } = useSelector((state) => state.workspace);
+  const visibleProjects = useVisibleProjects();
 
   const getTasksFromCurrentWorkspace = () => {
     if (!currentWorkspace) return;
 
-    const tasks = currentWorkspace.projects.flatMap((project) =>
+    const tasks = (visibleProjects || []).flatMap((project) =>
       project.tasks.map((task) => task)
     );
     setTasks(tasks);

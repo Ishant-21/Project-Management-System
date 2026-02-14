@@ -35,7 +35,7 @@ const Sidebar = ({ isSidebarOpen, setIsSidebarOpen }) => {
   return (
     <div
       ref={sidebarRef}
-      className={`z-10 bg-white dark:bg-zinc-900 min-w-68 flex flex-col h-screen border-r border-gray-200 dark:border-zinc-800 max-sm:absolute transition-all ${
+      className={`z-10 bg-white dark:bg-zinc-900 w-56 sm:w-60 md:w-64 lg:w-72 xl:w-80 flex flex-col h-screen border-r border-gray-200 dark:border-zinc-800 max-sm:absolute transition-all ${
         isSidebarOpen ? "left-0" : "-left-full"
       } `}
     >

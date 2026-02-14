@@ -54,9 +54,9 @@ function WorkspaceDropdown() {
       >
         <div className="flex items-center gap-3">
           <img
-            src={currentWorkspace?.image_url}
+            src={currentWorkspace?.image_url || "/workspace.svg"}
             alt={currentWorkspace?.name}
-            className="w-8 h-8 rounded shadow"
+            className="w-8 h-8 rounded shadow filter dark:invert"
           />
           <div className="min-w-0 flex-1">
             <p className="font-semibold text-gray-800 dark:text-white text-sm truncate">
@@ -83,9 +83,9 @@ function WorkspaceDropdown() {
                 className="flex items-center gap-3 p-2 cursor-pointer rounded hover:bg-gray-100 dark:hover:bg-zinc-800"
               >
                 <img
-                  src={ws.imageUrl}
+                  src={ws.imageUrl || "/workspace.svg"}
                   alt={ws.name}
-                  className="w-6 h-6 rounded"
+                  className="w-6 h-6 rounded filter dark:invert"
                 />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-800 dark:text-white truncate">

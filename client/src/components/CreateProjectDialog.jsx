@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { XIcon } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
+import { useUser } from "../lib/auth";
 import toast from "react-hot-toast";
 import api from "../configs/api";
 import { useAuth } from "../lib/auth";
@@ -11,6 +12,10 @@ const CreateProjectDialog = ({ isDialogOpen, setIsDialogOpen }) => {
   const dispatch = useDispatch();
 
   const { currentWorkspace } = useSelector((state) => state.workspace);
+  const { user } = useUser();
+  const isAdmin = currentWorkspace?.members?.some(
+    (m) => ((m.userId === user?.id) || (m.user && m.user.id === user?.id)) && m.role === "ADMIN"
+  );
 
   const [formData, setFormData] = useState({
     name: "",
@@ -80,6 +85,11 @@ const CreateProjectDialog = ({ isDialogOpen, setIsDialogOpen }) => {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {!isAdmin && (
+            <div className="p-3 mb-2 text-sm bg-zinc-50 dark:bg-zinc-900 rounded text-zinc-700 dark:text-zinc-300">
+              Only workspace admins can create projects in this workspace.
+            </div>
+          )}
           {/* Project Name */}
           <div>
             <label className="block text-sm mb-1">Project Name</label>
@@ -256,8 +266,13 @@ const CreateProjectDialog = ({ isDialogOpen, setIsDialogOpen }) => {
               Cancel
             </button>
             <button
-              disabled={isSubmitting || !currentWorkspace}
-              className="px-4 py-2 rounded bg-gradient-to-br from-blue-500 to-blue-600 text-white dark:text-zinc-200"
+              disabled={isSubmitting || !currentWorkspace || !isAdmin}
+              title={!isAdmin ? "Only workspace admins can create projects" : undefined}
+              className={`px-4 py-2 rounded text-white dark:text-zinc-200 transition ${
+                isAdmin
+                  ? "bg-gradient-to-br from-blue-500 to-blue-600"
+                  : "bg-zinc-200 text-zinc-500 cursor-not-allowed"
+              }`}
             >
               {isSubmitting ? "Creating..." : "Create Project"}
             </button>

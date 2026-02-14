@@ -5,6 +5,7 @@ import {
   ChevronRightIcon,
 } from "lucide-react";
 import { useSelector } from "react-redux";
+import useVisibleProjects from "../hooks/useVisibleProjects";
 import { Link } from "react-router-dom";
 import { useUser } from "../lib/auth";
 
@@ -12,6 +13,7 @@ function MyTasksSidebar() {
   const { user } = useUser();
 
   const { currentWorkspace } = useSelector((state) => state.workspace);
+  const visibleProjects = useVisibleProjects();
   const [showMyTasks, setShowMyTasks] = useState(false);
   const [myTasks, setMyTasks] = useState([]);
 
@@ -33,10 +35,8 @@ function MyTasksSidebar() {
   const fetchUserTasks = () => {
     const userId = user?.id || "";
     if (!userId || !currentWorkspace) return;
-    const currentWorkspaceTasks = currentWorkspace.projects.flatMap(
-      (project) => {
-        return project.tasks.filter((task) => task?.assignee?.id === userId);
-      }
+    const currentWorkspaceTasks = (visibleProjects || []).flatMap((project) =>
+      project.tasks.filter((task) => task?.assignee?.id === userId)
     );
 
     setMyTasks(currentWorkspaceTasks);

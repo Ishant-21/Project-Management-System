@@ -1,7 +1,8 @@
 import { format } from "date-fns";
 import toast from "react-hot-toast";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { useState, useMemo } from "react";
+import { useUser } from "../lib/auth";
 import { useNavigate } from "react-router-dom";
 import { deleteTask, updateTask } from "../features/workspaceSlice";
 import {
@@ -48,6 +49,14 @@ const ProjectTasks = ({ tasks }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const [selectedTasks, setSelectedTasks] = useState([]);
+
+  const { user } = useUser();
+  const currentWorkspace = useSelector((state) => state.workspace.currentWorkspace);
+
+  const projectLead = currentWorkspace?.projects?.find(
+    (p) => p.id === tasks?.[0]?.projectId
+  )?.team_lead;
+  const isLead = projectLead === user?.id;
 
   const [filters, setFilters] = useState({
     status: "",
@@ -196,7 +205,13 @@ const ProjectTasks = ({ tasks }) => {
           <button
             type="button"
             onClick={handleDelete}
-            className="px-3 py-1 flex items-center gap-2 rounded bg-gradient-to-br from-indigo-400 to-indigo-500 text-zinc-100 dark:text-zinc-200 text-sm transition-colors"
+            disabled={!isLead}
+            title={!isLead ? "Only project lead can delete tasks" : undefined}
+            className={`px-3 py-1 flex items-center gap-2 rounded text-sm transition ${
+              isLead
+                ? "bg-gradient-to-br from-indigo-400 to-indigo-500 text-zinc-100"
+                : "bg-zinc-200 text-zinc-500 cursor-not-allowed"
+            }`}
           >
             <Trash className="size-3" /> Delete
           </button>
@@ -291,7 +306,9 @@ const ProjectTasks = ({ tasks }) => {
                               handleStatusChange(task.id, e.target.value)
                             }
                             value={task.status}
-                            className="group-hover:ring ring-zinc-100 outline-none px-2 pr-4 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200 cursor-pointer"
+                            disabled={!isLead}
+                            title={!isLead ? "Only project lead can update status" : undefined}
+                            className="group-hover:ring ring-zinc-100 outline-none px-2 pr-4 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200 cursor-pointer disabled:opacity-50"
                           >
                             <option value="TODO">To Do</option>
                             <option value="IN_PROGRESS">In Progress</option>
@@ -301,7 +318,7 @@ const ProjectTasks = ({ tasks }) => {
                         <td className="px-4 py-2">
                           <div className="flex items-center gap-2">
                             <img
-                              src={task.assignee?.image}
+                              src={task.assignee?.image || "/profile.svg"}
                               className="size-5 rounded-full"
                               alt="avatar"
                             />
@@ -385,7 +402,9 @@ const ProjectTasks = ({ tasks }) => {
                           handleStatusChange(task.id, e.target.value)
                         }
                         value={task.status}
-                        className="w-full mt-1 bg-zinc-100 dark:bg-zinc-800 ring-1 ring-zinc-300 dark:ring-zinc-700 outline-none px-2 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200"
+                        disabled={!isLead}
+                        title={!isLead ? "Only project lead can update status" : undefined}
+                        className="w-full mt-1 bg-zinc-100 dark:bg-zinc-800 ring-1 ring-zinc-300 dark:ring-zinc-700 outline-none px-2 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200 disabled:opacity-50"
                       >
                         <option value="TODO">To Do</option>
                         <option value="IN_PROGRESS">In Progress</option>
@@ -395,7 +414,7 @@ const ProjectTasks = ({ tasks }) => {
 
                     <div className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
                       <img
-                        src={task.assignee?.image}
+                        src={task.assignee?.image || "/profile.svg"}
                         className="size-5 rounded-full"
                         alt="avatar"
                       />

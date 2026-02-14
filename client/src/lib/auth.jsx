@@ -95,7 +95,7 @@ export const useOrganizationList = (opts = {}) => {
         const mapped = (data?.workspaces || []).map((ws) => ({
           organization: {
             id: ws.id,
-            imageUrl: ws.image_url || ws.imageUrl || "",
+            imageUrl: ws.image_url || ws.imageUrl || "/workspace.svg",
             name: ws.name,
             membersCount: ws.members?.length || 0,
           },
@@ -175,6 +175,8 @@ export const UserButton = () => {
   const auth = useAuth();
   const navigate = useNavigate();
 
+  const [open, setOpen] = useState(false);
+
   const handleLogout = () => {
     auth.clearToken();
     navigate("/signin");
@@ -194,14 +196,32 @@ export const UserButton = () => {
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-sm hidden sm:block">{user.name}</span>
+    <div className="relative">
       <button
-        onClick={handleLogout}
-        className="px-3 py-1 text-sm rounded bg-red-600 text-white"
+        onClick={() => setOpen((v) => !v)}
+        className="px-3 py-1 text-sm rounded bg-white dark:bg-zinc-800 shadow flex items-center gap-2"
       >
-        Logout
+        <span className="hidden sm:block">Account</span>
+        <span className="sm:hidden text-sm">{user.name?.split(" ")[0] || "Me"}</span>
       </button>
+
+      {open && (
+        <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded p-3 shadow z-50">
+          <div className="text-sm text-zinc-900 dark:text-zinc-200 mb-2">
+            <span className="font-medium">current user :</span>
+            <span className="ml-2 truncate">{user.name}</span>
+          </div>
+          <button
+            onClick={() => {
+              handleLogout();
+              setOpen(false);
+            }}
+            className="w-full px-3 py-1 text-sm rounded bg-red-600 text-white"
+          >
+            Logout
+          </button>
+        </div>
+      )}
     </div>
   );
 };

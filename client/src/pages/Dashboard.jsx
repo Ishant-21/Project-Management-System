@@ -1,14 +1,20 @@
 import { Plus } from "lucide-react";
 import { useState } from "react";
+import { useSelector } from "react-redux";
+import { useUser } from "../lib/auth";
 import StatsGrid from "../components/StatsGrid";
 import ProjectOverview from "../components/ProjectOverview";
 import RecentActivity from "../components/RecentActivity";
 import TasksSummary from "../components/TasksSummary";
 import CreateProjectDialog from "../components/CreateProjectDialog";
-import { useUser } from "../lib/auth";
+
 
 const Dashboard = () => {
   const { user } = useUser();
+  const currentWorkspace = useSelector((state) => state.workspace.currentWorkspace);
+  const isAdmin = currentWorkspace?.members?.some(
+    (m) => ((m.userId === user?.id) || (m.user && m.user.id === user?.id)) && m.role === "ADMIN"
+  );
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   return (
@@ -26,8 +32,14 @@ const Dashboard = () => {
         </div>
 
         <button
-          onClick={() => setIsDialogOpen(true)}
-          className="flex items-center gap-2 px-5 py-2 text-sm rounded bg-gradient-to-br from-blue-500 to-blue-600 text-white space-x-2 hover:opacity-90 transition"
+          onClick={() => isAdmin && setIsDialogOpen(true)}
+          disabled={!isAdmin}
+          title={!isAdmin ? "Only workspace admins can create projects" : "Create new project"}
+          className={`flex items-center gap-2 px-5 py-2 text-sm rounded space-x-2 transition ${
+            isAdmin
+              ? "bg-gradient-to-br from-blue-500 to-blue-600 text-white hover:opacity-90"
+              : "bg-zinc-200 text-zinc-500 cursor-not-allowed"
+          }`}
         >
           <Plus size={16} /> New Project
         </button>

@@ -2,16 +2,18 @@ import { useEffect, useState } from "react";
 import { ArrowRight, Clock, AlertTriangle, User } from "lucide-react";
 import { useSelector } from "react-redux";
 import { useUser } from "../lib/auth";
+import useVisibleProjects from "../hooks/useVisibleProjects";
 
 export default function TasksSummary() {
   const { currentWorkspace } = useSelector((state) => state.workspace);
   const { user } = useUser();
+  const visibleProjects = useVisibleProjects();
   const [tasks, setTasks] = useState([]);
 
   // Get all tasks for all projects in current workspace
   useEffect(() => {
     if (currentWorkspace) {
-      setTasks(currentWorkspace.projects.flatMap((project) => project.tasks));
+      setTasks((visibleProjects || []).flatMap((project) => project.tasks));
     }
   }, [currentWorkspace]);
 
