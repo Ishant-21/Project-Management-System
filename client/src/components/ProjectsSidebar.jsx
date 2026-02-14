@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import {
   ChevronRightIcon,
@@ -16,9 +16,13 @@ const ProjectSidebar = () => {
   const [expandedProjects, setExpandedProjects] = useState(new Set());
   const [searchParams] = useSearchParams();
 
-  const projects = useSelector(
-    (state) => state?.workspace?.currentWorkspace?.projects || []
+  const currentWorkspace = useSelector(
+    (state) => state?.workspace?.currentWorkspace
   );
+
+  const projects = useMemo(() => currentWorkspace?.projects || [], [
+    currentWorkspace,
+  ]);
 
   const getProjectSubItems = (projectId) => [
     {

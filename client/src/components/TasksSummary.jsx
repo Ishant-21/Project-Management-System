@@ -15,7 +15,7 @@ export default function TasksSummary() {
     }
   }, [currentWorkspace]);
 
-  const myTasks = tasks.filter((i) => i.assigneeId === user.id);
+  const myTasks = user ? tasks.filter((i) => i.assigneeId === user.id) : [];
   const overdueTasks = tasks.filter(
     (t) =>
       t.due_date && new Date(t.due_date) < new Date() && t.status !== "DONE"

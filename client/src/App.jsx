@@ -9,6 +9,7 @@ import TaskDetails from "./pages/TaskDetails";
 import SignIn from "./pages/SignIn";
 import SignUp from "./pages/SignUp";
 import CreateOrganization from "./components/CreateOrganization";
+import Profile from "./pages/Profile";
 
 const App = () => {
   return (
@@ -25,6 +26,7 @@ const App = () => {
           <Route path="projectsDetail" element={<ProjectDetails />} />
           <Route path="taskDetails" element={<TaskDetails />} />
           <Route path="create-organization" element={<CreateOrganization />} />
+          <Route path="profile" element={<Profile />} />
         </Route>
       </Routes>
     </>

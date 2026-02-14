@@ -16,7 +16,6 @@ export const useUser = () => {
 
   useEffect(() => {
     let mounted = true;
-
     const load = async () => {
       const token = localStorage.getItem("token");
       if (!token) {
@@ -40,10 +39,21 @@ export const useUser = () => {
       }
     };
 
+    // Load once on mount
     load();
+
+    // Re-load when other parts of the app dispatch an auth change (login/logout)
+    const handleAuthChange = () => {
+      // reset loaded flag while refreshing
+      if (mounted) setLoaded(false);
+      load();
+    };
+
+    window.addEventListener("auth:change", handleAuthChange);
 
     return () => {
       mounted = false;
+      window.removeEventListener("auth:change", handleAuthChange);
     };
   }, []);
 
@@ -51,7 +61,14 @@ export const useUser = () => {
 };
 
 export const useClerk = () => ({
-  openUserProfile: () => {},
+  openUserProfile: () => {
+    try {
+      // Navigate to the app's profile page (fallback for Clerk-hosted profile)
+      window.location.href = "/profile";
+    } catch (e) {
+      window.location.assign("/profile");
+    }
+  },
   openCreateOrganization: () => {
     // navigate to create organization page
     try {
@@ -101,14 +118,54 @@ export const useOrganizationList = (opts = {}) => {
 
   const setActive = ({ organization }) => {
     try {
-      localStorage.setItem("currentWorkspace", organization);
+      // store the workspace id under the same key the redux slice reads
+      const id = typeof organization === "string" ? organization : organization?.id;
+      if (id) localStorage.setItem("currentWorkspaceId", id);
     } catch (e) {}
   };
 
   return { setActive, userMemberships, isLoaded };
 };
 
-export const useOrganization = () => ({ organization: null });
+export const useOrganization = () => {
+  const [organization, setOrganization] = useState(null);
+
+  useEffect(() => {
+    // Provide a lightweight organization object backed by localStorage
+    const workspaceId = localStorage.getItem("currentWorkspaceId");
+
+    if (!workspaceId) {
+      setOrganization(null);
+      return;
+    }
+
+    const org = {
+      id: workspaceId,
+      inviteMember: async ({ emailAddress, role, message } = {}) => {
+        if (!emailAddress || !role) {
+          throw new Error("Missing email or role");
+        }
+
+        // Map client role values to server role values
+        const mappedRole = role === "org:admin" ? "ADMIN" : "MEMBER";
+
+        const body = {
+          email: emailAddress,
+          role: mappedRole,
+          workspaceId,
+          message: message || "",
+        };
+
+        const res = await api.post("/api/workspaces/add-member", body);
+        return res.data;
+      },
+    };
+
+    setOrganization(org);
+  }, []);
+
+  return { organization };
+};
 
 import { useNavigate } from "react-router-dom";
 import React from "react";

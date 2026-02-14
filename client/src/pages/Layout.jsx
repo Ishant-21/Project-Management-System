@@ -45,13 +45,8 @@ const Layout = () => {
       </div>
     );
 
-  if (user && workspaces.length === 0) {
-    return (
-      <div className="min-h-screen flex justify-center items-center bg-white dark:bg-zinc-950">
-        <CreateOrganization />
-      </div>
-    );
-  }
+  // Allow authenticated users to access the app even if they have no workspaces yet.
+  // Creating a workspace should be optional and done from the Workspace dropdown.
 
   return (
     <div className="flex bg-white dark:bg-zinc-950 text-gray-900 dark:text-slate-100">

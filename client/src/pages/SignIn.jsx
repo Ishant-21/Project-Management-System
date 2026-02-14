@@ -17,6 +17,10 @@ const SignIn = () => {
       const { data } = await api.post("/auth/login", { email, password });
       if (data?.token) {
         localStorage.setItem("token", data.token);
+        // Notify the app that auth state changed so hooks can reload user data
+        try {
+          window.dispatchEvent(new Event("auth:change"));
+        } catch (e) {}
         // navigate to app root - Layout's useUser will pick up the token and load user
         navigate("/");
       }

@@ -5,6 +5,7 @@ import crypto from "crypto";
 export const getUserWorkspaces = async (req, res) => {
   try {
     const { userId } = await req.auth();
+    console.log("[workspace] fetching for userId:", userId);
     const workspaces = await prisma.workspace.findMany({
       where: {
         members: { some: { userId: userId } },
@@ -29,6 +30,7 @@ export const getUserWorkspaces = async (req, res) => {
         owner: true,
       },
     });
+    console.log("[workspace] returning workspaces:", workspaces.length);
 
     res.json({ workspaces });
   } catch (error) {

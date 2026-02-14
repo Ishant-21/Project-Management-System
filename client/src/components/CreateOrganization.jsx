@@ -27,6 +27,14 @@ const CreateOrganization = () => {
 
   return (
     <div className="max-w-md w-full p-6 bg-white rounded shadow">
+      <button
+        type="button"
+        onClick={() => navigate(-1)}
+        className="mb-3 text-sm text-gray-600 hover:underline"
+        aria-label="Go back"
+      >
+        ← Back
+      </button>
       <h2 className="text-2xl font-semibold mb-4">Create Organization</h2>
       {error && <div className="text-red-600 mb-2">{error}</div>}
       <form onSubmit={submit}>

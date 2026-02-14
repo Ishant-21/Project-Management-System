@@ -31,9 +31,9 @@ export const register = async (req, res) => {
       select: { id: true, name: true, email: true },
     });
 
-    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET);
-
-    res.json({ user, token });
+    // Do not return an auth token on registration to avoid auto-login.
+    // Require the user to explicitly sign in via /auth/login.
+    res.status(201).json({ user });
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: error.message || error.code });
@@ -44,17 +44,23 @@ export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    console.log("[auth] login attempt for:", email);
+
     if (!email || !password) {
       return res.status(400).json({ message: "Email and password are required" });
     }
 
     const user = await prisma.user.findUnique({ where: { email } });
 
+    console.log("[auth] user found:", !!user);
+
     if (!user || !user.password) {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
     const match = await bcrypt.compare(password, user.password);
+
+    console.log("[auth] password match:", match);
 
     if (!match) {
       return res.status(400).json({ message: "Invalid credentials" });
