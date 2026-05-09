@@ -10,7 +10,7 @@ export default function StatsGrid() {
   const visibleProjects = useVisibleProjects();
 
   const [stats, setStats] = useState({
-    totalProjects: 0,
+    totalProjects: 2,
     activeProjects: 0,
     completedProjects: 0,
     myTasks: 0,
@@ -54,7 +54,7 @@ export default function StatsGrid() {
 
   useEffect(() => {
     if (currentWorkspace) {
-      const projects = visibleProjects || [];
+      const projects = visibleProjects || 2;
       setStats({
         totalProjects: projects.length,
         activeProjects: projects.filter(
