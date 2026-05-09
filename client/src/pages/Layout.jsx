@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { Outlet, useLocation } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
 import Navbar from "../components/Navbar";
 import Sidebar from "../components/Sidebar";
-import { Outlet } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { loadTheme } from "../features/themeSlice";
 import { Loader2Icon } from "lucide-react";
@@ -17,6 +17,15 @@ const Layout = () => {
 
   const { user, isLoaded } = useUser();
   const { getToken } = useAuth();
+  const { pathname, search } = useLocation();
+  const mainContentRef = useRef(null);
+
+  // Scroll to top on route change
+  useEffect(() => {
+    if (mainContentRef.current) {
+      mainContentRef.current.scrollTo(0, 0);
+    }
+  }, [pathname, search]);
 
   // Initial load of theme
   useEffect(() => {
@@ -59,7 +68,10 @@ const Layout = () => {
           isSidebarOpen={isSidebarOpen}
           setIsSidebarOpen={setIsSidebarOpen}
         />
-        <div className="flex-1 h-full p-6 xl:p-10 xl:px-16 overflow-y-scroll">
+        <div 
+          ref={mainContentRef}
+          className="flex-1 h-full p-6 xl:p-10 xl:px-16 overflow-y-scroll"
+        >
           <Outlet />
         </div>
       </div>

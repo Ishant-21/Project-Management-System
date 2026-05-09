@@ -82,7 +82,7 @@ const TaskDetails = () => {
 
   useEffect(() => {
     fetchTaskDetails();
-  }, [taskId]);
+  }, [taskId, projectId]);
 
   useEffect(() => {
     if (taskId && task) {

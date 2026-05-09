@@ -60,25 +60,18 @@ export const useUser = () => {
   return { user, isLoaded };
 };
 
-export const useClerk = () => ({
-  openUserProfile: () => {
-    try {
-      // Navigate to the app's profile page (fallback for Clerk-hosted profile)
-      window.location.href = "/profile";
-    } catch (e) {
-      window.location.assign("/profile");
-    }
-  },
-  openCreateOrganization: () => {
-    // navigate to create organization page
-    try {
-      window.location.href = "/create-organization";
-    } catch (e) {
-      // fallback
-      window.location.assign("/create-organization");
-    }
-  },
-});
+export const useClerk = () => {
+  const navigate = useNavigate();
+
+  return {
+    openUserProfile: () => {
+      navigate("/profile");
+    },
+    openCreateOrganization: () => {
+      navigate("/create-organization");
+    },
+  };
+};
 
 export const useOrganizationList = (opts = {}) => {
   const [userMemberships, setUserMemberships] = useState({ data: [] });
