@@ -10,7 +10,7 @@ export default function StatsGrid() {
   const visibleProjects = useVisibleProjects();
 
   const [stats, setStats] = useState({
-    totalProjects: 2,
+    totalProjects: 0,
     activeProjects: 0,
     completedProjects: 0,
     myTasks: 0,

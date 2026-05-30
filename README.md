@@ -6,7 +6,7 @@ password :admin
 
 
 username : admin2@gmail.com
-password :admin2
+password :asd123
 
 
 members :- 
