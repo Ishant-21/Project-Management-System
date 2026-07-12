@@ -23,6 +23,12 @@ const InviteMemberDialog = ({ isDialogOpen, setIsDialogOpen }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!organization) {
+      toast.error("No active workspace selected");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {

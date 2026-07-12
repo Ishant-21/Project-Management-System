@@ -133,7 +133,11 @@ export default function ProjectSettings({ project }) {
               <label className={labelClasses}>Start Date</label>
               <input
                 type="date"
-                value={format(formData.start_date, "yyyy-MM-dd")}
+                value={
+                  formData.start_date
+                    ? format(new Date(formData.start_date), "yyyy-MM-dd")
+                    : ""
+                }
                 onChange={(e) =>
                   setFormData({
                     ...formData,
@@ -147,7 +151,11 @@ export default function ProjectSettings({ project }) {
               <label className={labelClasses}>End Date</label>
               <input
                 type="date"
-                value={format(formData.end_date, "yyyy-MM-dd")}
+                value={
+                  formData.end_date
+                    ? format(new Date(formData.end_date), "yyyy-MM-dd")
+                    : ""
+                }
                 onChange={(e) =>
                   setFormData({
                     ...formData,

@@ -39,18 +39,23 @@ const TaskDetails = () => {
     }
   };
 
-  const fetchTaskDetails = async () => {
-    setLoading(true);
-    if (!projectId || !taskId) return;
+  const fetchTaskDetails = () => {
+    if (!projectId || !taskId) {
+      setTask(null);
+      setProject(null);
+      setLoading(false);
+      return;
+    }
+
+    // Workspace/projects not loaded yet — stay in loading state so the
+    // effect re-runs (and resolves) once the data arrives.
+    if (!currentWorkspace) return;
 
     const proj = (visibleProjects || []).find((p) => p.id === projectId);
-    if (!proj) return;
+    const tsk = proj?.tasks?.find((t) => t.id === taskId);
 
-    const tsk = proj.tasks.find((t) => t.id === taskId);
-    if (!tsk) return;
-
-    setTask(tsk);
-    setProject(proj);
+    setProject(proj || null);
+    setTask(tsk || null);
     setLoading(false);
   };
 
@@ -82,7 +87,7 @@ const TaskDetails = () => {
 
   useEffect(() => {
     fetchTaskDetails();
-  }, [taskId]);
+  }, [taskId, projectId, currentWorkspace]);
 
   useEffect(() => {
     if (taskId && task) {
@@ -212,7 +217,7 @@ const TaskDetails = () => {
             </div>
             <div className="flex items-center gap-2">
               <CalendarIcon className="size-4 text-gray-500 dark:text-zinc-500" />
-              Due : {format(new Date(task.due_date), "dd MMM yyyy")}
+              Due : {task.due_date ? format(new Date(task.due_date), "dd MMM yyyy") : "—"}
             </div>
           </div>
         </div>
@@ -227,7 +232,9 @@ const TaskDetails = () => {
             </h2>
             <p className="text-xs mt-3">
               Project Start Date:{" "}
-              {format(new Date(project.start_date), "dd MMM yyyy")}
+              {project.start_date
+                ? format(new Date(project.start_date), "dd MMM yyyy")
+                : "—"}
             </p>
             <div className="flex flex-wrap gap-4 text-sm text-gray-500 dark:text-zinc-400 mt-3">
               <span>Status: {project.status}</span>

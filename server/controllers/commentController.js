@@ -6,10 +6,20 @@ export const addComment = async (req, res) => {
     const { userId } = await req.auth();
     const { content, taskId } = req.body;
 
+    if (!taskId || !content?.trim()) {
+      return res
+        .status(400)
+        .json({ message: "taskId and content are required" });
+    }
+
     // Check if user is project member
     const task = await prisma.task.findUnique({
       where: { id: taskId },
     });
+
+    if (!task) {
+      return res.status(404).json({ message: "Task not found" });
+    }
 
     const project = await prisma.project.findUnique({
       where: { id: task.projectId },

@@ -40,14 +40,33 @@ const CreateProjectDialog = ({ isDialogOpen, setIsDialogOpen }) => {
 
       setIsSubmitting(true);
 
+      // Always include the creator as a project member, otherwise the new
+      // project is filtered out of their own views (useVisibleProjects only
+      // shows projects the current user belongs to).
+      const team_members = user?.email
+        ? [...new Set([...formData.team_members, user.email])]
+        : formData.team_members;
+
       const { data } = await api.post(
         "/api/projects",
-        { workspaceId: currentWorkspace.id, ...formData },
+        { workspaceId: currentWorkspace.id, ...formData, team_members },
         { headers: { Authorization: `Bearer ${await getToken()}` } }
       );
 
       dispatch(addProject(data.project));
       setIsDialogOpen(false);
+      // Reset so reopening the dialog starts fresh instead of showing stale data.
+      setFormData({
+        name: "",
+        description: "",
+        status: "PLANNING",
+        priority: "MEDIUM",
+        start_date: "",
+        end_date: "",
+        team_members: [],
+        team_lead: "",
+        progress: 0,
+      });
     } catch (error) {
       toast.error(error?.response?.data?.message || error.message);
     } finally {
@@ -227,9 +246,12 @@ const CreateProjectDialog = ({ isDialogOpen, setIsDialogOpen }) => {
             >
               <option value="">Add team members</option>
               {currentWorkspace?.members
-                ?.filter((email) => !formData.team_members.includes(email))
+                ?.filter(
+                  (member) =>
+                    !formData.team_members.includes(member.user.email)
+                )
                 .map((member) => (
-                  <option key={member.user.email} value={member.email}>
+                  <option key={member.user.email} value={member.user.email}>
                     {member.user.email}
                   </option>
                 ))}

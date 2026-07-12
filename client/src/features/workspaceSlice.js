@@ -55,97 +55,63 @@ const workspaceSlice = createSlice({
     },
     deleteWorkspace: (state, action) => {
       state.workspaces = state.workspaces.filter(
-        (w) => w._id !== action.payload
+        (w) => w.id !== action.payload
       );
+      if (state.currentWorkspace?.id === action.payload) {
+        state.currentWorkspace = state.workspaces[0] || null;
+      }
     },
+    // NOTE: currentWorkspace is always the same object reference as an entry in
+    // `workspaces`. We therefore mutate the entry in `workspaces` and re-point
+    // currentWorkspace at it, instead of updating both (which double-inserted).
     addProject: (state, action) => {
-      state.currentWorkspace.projects.push(action.payload);
-      // find workspace by id and add project to it
-      state.workspaces = state.workspaces.map((w) =>
-        w.id === state.currentWorkspace.id
-          ? { ...w, projects: w.projects.concat(action.payload) }
-          : w
+      const ws = state.workspaces.find(
+        (w) => w.id === state.currentWorkspace?.id
       );
+      if (!ws) return;
+      ws.projects.push(action.payload);
+      state.currentWorkspace = ws;
     },
     addTask: (state, action) => {
-      state.currentWorkspace.projects = state.currentWorkspace.projects.map(
-        (p) => {
-          console.log(
-            p.id,
-            action.payload.projectId,
-            p.id === action.payload.projectId
-          );
-          if (p.id === action.payload.projectId) {
-            p.tasks.push(action.payload);
-          }
-          return p;
-        }
+      const ws = state.workspaces.find(
+        (w) => w.id === state.currentWorkspace?.id
       );
-
-      // find workspace and project by id and add task to it
-      state.workspaces = state.workspaces.map((w) =>
-        w.id === state.currentWorkspace.id
-          ? {
-              ...w,
-              projects: w.projects.map((p) =>
-                p.id === action.payload.projectId
-                  ? { ...p, tasks: p.tasks.concat(action.payload) }
-                  : p
-              ),
-            }
-          : w
+      if (!ws) return;
+      const project = ws.projects.find(
+        (p) => p.id === action.payload.projectId
       );
+      if (project) {
+        if (!project.tasks) project.tasks = [];
+        project.tasks.push(action.payload);
+      }
+      state.currentWorkspace = ws;
     },
     updateTask: (state, action) => {
-      state.currentWorkspace.projects.map((p) => {
-        if (p.id === action.payload.projectId) {
-          p.tasks = p.tasks.map((t) =>
-            t.id === action.payload.id ? action.payload : t
-          );
-        }
-      });
-      // find workspace and project by id and update task in it
-      state.workspaces = state.workspaces.map((w) =>
-        w.id === state.currentWorkspace.id
-          ? {
-              ...w,
-              projects: w.projects.map((p) =>
-                p.id === action.payload.projectId
-                  ? {
-                      ...p,
-                      tasks: p.tasks.map((t) =>
-                        t.id === action.payload.id ? action.payload : t
-                      ),
-                    }
-                  : p
-              ),
-            }
-          : w
+      const ws = state.workspaces.find(
+        (w) => w.id === state.currentWorkspace?.id
       );
+      if (!ws) return;
+      const project = ws.projects.find(
+        (p) => p.id === action.payload.projectId
+      );
+      if (project) {
+        project.tasks = project.tasks.map((t) =>
+          t.id === action.payload.id ? action.payload : t
+        );
+      }
+      state.currentWorkspace = ws;
     },
     deleteTask: (state, action) => {
-      state.currentWorkspace.projects.map((p) => {
-        p.tasks = p.tasks.filter((t) => !action.payload.includes(t.id));
-        return p;
-      });
-      // find workspace and project by id and delete task from it
-      state.workspaces = state.workspaces.map((w) =>
-        w.id === state.currentWorkspace.id
-          ? {
-              ...w,
-              projects: w.projects.map((p) =>
-                p.id === action.payload.projectId
-                  ? {
-                      ...p,
-                      tasks: p.tasks.filter(
-                        (t) => !action.payload.includes(t.id)
-                      ),
-                    }
-                  : p
-              ),
-            }
-          : w
+      // payload is an array of task ids
+      const ids = action.payload;
+      const ws = state.workspaces.find(
+        (w) => w.id === state.currentWorkspace?.id
       );
+      if (!ws) return;
+      ws.projects.forEach((p) => {
+        p.tasks = p.tasks.filter((t) => !ids.includes(t.id));
+      });
+      state.currentWorkspace = ws;
     },
   },
 

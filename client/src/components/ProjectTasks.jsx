@@ -229,11 +229,14 @@ const ProjectTasks = ({ tasks }) => {
                   <th className="pl-2 pr-1">
                     <input
                       onChange={() =>
-                        selectedTasks.length > 1
+                        selectedTasks.length === filteredTasks.length
                           ? setSelectedTasks([])
-                          : setSelectedTasks(tasks.map((t) => t.id))
+                          : setSelectedTasks(filteredTasks.map((t) => t.id))
                       }
-                      checked={selectedTasks.length === tasks.length}
+                      checked={
+                        filteredTasks.length > 0 &&
+                        selectedTasks.length === filteredTasks.length
+                      }
                       type="checkbox"
                       className="size-3 accent-zinc-600 dark:accent-zinc-500"
                     />
@@ -328,7 +331,7 @@ const ProjectTasks = ({ tasks }) => {
                         <td className="px-4 py-2">
                           <div className="flex items-center gap-1 text-zinc-600 dark:text-zinc-400">
                             <CalendarIcon className="size-4" />
-                            {format(new Date(task.due_date), "dd MMMM")}
+                            {task.due_date ? format(new Date(task.due_date), "dd MMMM") : "—"}
                           </div>
                         </td>
                       </tr>
@@ -423,7 +426,7 @@ const ProjectTasks = ({ tasks }) => {
 
                     <div className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
                       <CalendarIcon className="size-4" />
-                      {format(new Date(task.due_date), "dd MMMM")}
+                      {task.due_date ? format(new Date(task.due_date), "dd MMMM") : "—"}
                     </div>
                   </div>
                 );

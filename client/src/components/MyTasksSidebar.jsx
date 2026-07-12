@@ -44,7 +44,7 @@ function MyTasksSidebar() {
 
   useEffect(() => {
     fetchUserTasks();
-  }, [currentWorkspace]);
+  }, [currentWorkspace, user]);
 
   return (
     <div className="mt-6 px-3">

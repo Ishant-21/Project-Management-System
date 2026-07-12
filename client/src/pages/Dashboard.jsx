@@ -23,7 +23,7 @@ const Dashboard = () => {
         <div>
           <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 dark:text-white mb-1">
             {" "}
-            Welcome back, {user?.fullName || "User"}{" "}
+            Welcome back, {user?.name || "User"}{" "}
           </h1>
           <p className="text-gray-500 dark:text-zinc-400 text-sm">
             {" "}

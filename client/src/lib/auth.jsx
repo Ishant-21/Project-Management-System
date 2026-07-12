@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSelector } from "react-redux";
 import api from "../configs/api";
 
 // Simple client-side auth hooks that use localStorage + /auth/me
@@ -129,10 +130,16 @@ export const useOrganizationList = (opts = {}) => {
 
 export const useOrganization = () => {
   const [organization, setOrganization] = useState(null);
+  // Prefer the live workspace from Redux; fall back to localStorage. Reading
+  // localStorage only once (as before) could target a stale/absent workspace
+  // on first login, before currentWorkspaceId was written.
+  const currentWorkspaceId = useSelector(
+    (state) => state.workspace?.currentWorkspace?.id || null
+  );
 
   useEffect(() => {
-    // Provide a lightweight organization object backed by localStorage
-    const workspaceId = localStorage.getItem("currentWorkspaceId");
+    const workspaceId =
+      currentWorkspaceId || localStorage.getItem("currentWorkspaceId");
 
     if (!workspaceId) {
       setOrganization(null);
@@ -162,7 +169,7 @@ export const useOrganization = () => {
     };
 
     setOrganization(org);
-  }, []);
+  }, [currentWorkspaceId]);
 
   return { organization };
 };

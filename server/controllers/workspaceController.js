@@ -53,6 +53,9 @@ export const createWorkspace = async (req, res) => {
     const slugBase = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
     const slug = `${slugBase}-${id.slice(0, 8)}`;
 
+    // Create the workspace and add the creator as ADMIN atomically, so a
+    // failure can't leave an orphaned workspace with no members (which would be
+    // invisible to getUserWorkspaces and thus inaccessible to its creator).
     const workspace = await prisma.workspace.create({
       data: {
         id,
@@ -60,15 +63,12 @@ export const createWorkspace = async (req, res) => {
         slug,
         description: description || "",
         ownerId: userId,
-      },
-    });
-
-    // add creator as admin member
-    await prisma.workspaceMember.create({
-      data: {
-        userId,
-        workspaceId: id,
-        role: "ADMIN",
+        members: {
+          create: {
+            userId,
+            role: "ADMIN",
+          },
+        },
       },
     });
 
@@ -90,21 +90,22 @@ export const addMember = async (req, res) => {
     const { userId } = await req.auth();
     const { email, role, workspaceId, message } = req.body;
 
-    // Check if user exists
-    const user = await prisma.user.findUnique({ where: { email } });
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    // Check if no missing parameters
-    if (!workspaceId || !role) {
+    // Validate parameters BEFORE any DB lookup (a missing email would otherwise
+    // make prisma.user.findUnique throw a 500).
+    if (!email || !workspaceId || !role) {
       return res.status(400).json({ message: "Missing required parameters" });
     }
 
     // Check if role is valid
     if (!["ADMIN", "MEMBER"].includes(role)) {
       return res.status(400).json({ message: "Invalid role" });
+    }
+
+    // Check if user exists
+    const user = await prisma.user.findUnique({ where: { email } });
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
     }
 
     // fetch workspace

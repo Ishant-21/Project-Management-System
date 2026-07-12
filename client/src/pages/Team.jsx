@@ -28,7 +28,7 @@ const Team = () => {
     setUsers(currentWorkspace?.members || []);
     setTasks(
       currentWorkspace?.projects?.reduce(
-        (acc, project) => [...acc, ...project.tasks],
+        (acc, project) => [...acc, ...(project.tasks || [])],
         []
       ) || []
     );

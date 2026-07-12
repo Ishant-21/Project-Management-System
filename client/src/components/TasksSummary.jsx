@@ -15,7 +15,7 @@ export default function TasksSummary() {
     if (currentWorkspace) {
       setTasks((visibleProjects || []).flatMap((project) => project.tasks));
     }
-  }, [currentWorkspace]);
+  }, [currentWorkspace, user]);
 
   const myTasks = user ? tasks.filter((i) => i.assigneeId === user.id) : [];
   const overdueTasks = tasks.filter(

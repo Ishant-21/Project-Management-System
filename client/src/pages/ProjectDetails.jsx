@@ -23,9 +23,10 @@ export default function ProjectDetail() {
   const id = searchParams.get("id");
 
   const navigate = useNavigate();
-  const projects = useSelector(
-    (state) => state?.workspace?.currentWorkspace?.projects || []
+  const currentWorkspace = useSelector(
+    (state) => state?.workspace?.currentWorkspace || null
   );
+  const projects = currentWorkspace?.projects || [];
 
   const [project, setProject] = useState(null);
   const [tasks, setTasks] = useState([]);
@@ -38,11 +39,9 @@ export default function ProjectDetail() {
   }, [tab]);
 
   useEffect(() => {
-    if (projects && projects.length > 0) {
-      const proj = projects.find((p) => p.id === id);
-      setProject(proj);
-      setTasks(proj?.tasks || []);
-    }
+    const proj = projects.find((p) => p.id === id);
+    setProject(proj || null);
+    setTasks(proj?.tasks || []);
   }, [id, projects]);
 
   const statusColors = {
@@ -54,6 +53,15 @@ export default function ProjectDetail() {
     COMPLETED: "bg-blue-200 text-blue-900 dark:bg-blue-500 dark:text-blue-900",
     CANCELLED: "bg-red-200 text-red-900 dark:bg-red-500 dark:text-red-900",
   };
+
+  // Workspace data still loading — avoid flashing "Project not found".
+  if (!currentWorkspace) {
+    return (
+      <div className="p-6 text-center text-zinc-500 dark:text-zinc-400">
+        <p className="text-xl mt-40">Loading project...</p>
+      </div>
+    );
+  }
 
   if (!project) {
     return (
@@ -121,9 +129,7 @@ export default function ProjectDetail() {
           },
           {
             label: "In Progress",
-            value: tasks.filter(
-              (t) => t.status === "IN_PROGRESS" || t.status === "TODO"
-            ).length,
+            value: tasks.filter((t) => t.status === "IN_PROGRESS").length,
             color: "text-amber-700 dark:text-amber-400",
           },
           {

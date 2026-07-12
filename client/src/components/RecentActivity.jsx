@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { useSelector } from "react-redux";
+import { useUser } from "../lib/auth";
 import useVisibleProjects from "../hooks/useVisibleProjects";
 
 const typeIcons = {
@@ -32,20 +33,29 @@ const statusColors = {
 const RecentActivity = () => {
   const [tasks, setTasks] = useState([]);
   const { currentWorkspace } = useSelector((state) => state.workspace);
+  const { user } = useUser();
   const visibleProjects = useVisibleProjects();
 
   const getTasksFromCurrentWorkspace = () => {
     if (!currentWorkspace) return;
 
-    const tasks = (visibleProjects || []).flatMap((project) =>
-      project.tasks.map((task) => task)
+    const tasks = (visibleProjects || []).flatMap(
+      (project) => project.tasks || []
     );
-    setTasks(tasks);
+    // Show the most recently updated tasks first, capped to a short list.
+    const recent = [...tasks]
+      .sort(
+        (a, b) =>
+          new Date(b.updatedAt || b.createdAt || 0) -
+          new Date(a.updatedAt || a.createdAt || 0)
+      )
+      .slice(0, 8);
+    setTasks(recent);
   };
 
   useEffect(() => {
     getTasksFromCurrentWorkspace();
-  }, [currentWorkspace]);
+  }, [currentWorkspace, user]);
 
   return (
     <div className="bg-white dark:bg-zinc-950 dark:bg-gradient-to-br dark:from-zinc-800/70 dark:to-zinc-900/50 border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 rounded-lg transition-all overflow-hidden">
@@ -103,13 +113,18 @@ const RecentActivity = () => {
                         {task.assignee && (
                           <div className="flex items-center gap-1">
                             <div className="w-4 h-4 bg-zinc-300 dark:bg-zinc-700 rounded-full flex items-center justify-center text-[10px] text-zinc-800 dark:text-zinc-200">
-                              {task.assignee.name[0].toUpperCase()}
+                              {task.assignee.name?.[0]?.toUpperCase() || "?"}
                             </div>
                             {task.assignee.name}
                           </div>
                         )}
                         <span>
-                          {format(new Date(task.updatedAt), "MMM d, h:mm a")}
+                          {task.updatedAt || task.createdAt
+                            ? format(
+                                new Date(task.updatedAt || task.createdAt),
+                                "MMM d, h:mm a"
+                              )
+                            : ""}
                         </span>
                       </div>
                     </div>

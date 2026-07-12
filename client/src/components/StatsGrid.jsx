@@ -1,6 +1,7 @@
 import { FolderOpen, CheckCircle, Users, AlertTriangle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
+import { useUser } from "../lib/auth";
 import useVisibleProjects from "../hooks/useVisibleProjects";
 
 export default function StatsGrid() {
@@ -8,10 +9,10 @@ export default function StatsGrid() {
     (state) => state?.workspace?.currentWorkspace || null
   );
   const visibleProjects = useVisibleProjects();
+  const { user } = useUser();
 
   const [stats, setStats] = useState({
     totalProjects: 0,
-    activeProjects: 0,
     completedProjects: 0,
     myTasks: 0,
     overdueIssues: 0,
@@ -55,27 +56,35 @@ export default function StatsGrid() {
   useEffect(() => {
     if (currentWorkspace) {
       const projects = visibleProjects || [];
+      const now = new Date();
       setStats({
         totalProjects: projects.length,
-        activeProjects: projects.filter(
-          (p) => p.status !== "CANCELLED" && p.status !== "COMPLETED"
-        ).length,
-        completedProjects: projects
-          .filter((p) => p.status === "COMPLETED")
-          .reduce((acc, project) => acc + project.tasks.length, 0),
+        completedProjects: projects.filter((p) => p.status === "COMPLETED")
+          .length,
         myTasks: projects.reduce(
           (acc, project) =>
             acc +
-            project.tasks.filter((t) => t.assignee?.email === currentWorkspace.owner.email).length,
+            project.tasks.filter(
+              (t) =>
+                t.assignee?.id === user?.id ||
+                t.assignee?.email === user?.email
+            ).length,
           0
         ),
         overdueIssues: projects.reduce(
-          (acc, project) => acc + project.tasks.filter((t) => t.due_date < new Date()).length,
+          (acc, project) =>
+            acc +
+            project.tasks.filter(
+              (t) =>
+                t.status !== "DONE" &&
+                t.due_date &&
+                new Date(t.due_date) < now
+            ).length,
           0
         ),
       });
     }
-  }, [currentWorkspace]);
+  }, [currentWorkspace, user]);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 my-9">

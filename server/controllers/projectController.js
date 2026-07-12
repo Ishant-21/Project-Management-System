@@ -38,11 +38,24 @@ export const createProject = async (req, res) => {
       });
     }
 
-    // Get Team Lead using email
-    const teamLead = await prisma.user.findUnique({
-      where: { email: team_lead },
-      select: { id: true },
-    });
+    if (!name) {
+      return res.status(400).json({ message: "Project name is required" });
+    }
+
+    // Get Team Lead using email. team_lead is a required FK, so it must resolve
+    // to a real user — otherwise Prisma throws a 500 on create.
+    const teamLead = team_lead
+      ? await prisma.user.findUnique({
+          where: { email: team_lead },
+          select: { id: true },
+        })
+      : null;
+
+    if (!teamLead) {
+      return res
+        .status(400)
+        .json({ message: "A valid team lead is required" });
+    }
 
     const project = await prisma.project.create({
       data: {
@@ -52,7 +65,7 @@ export const createProject = async (req, res) => {
         status,
         priority,
         progress,
-        team_lead: teamLead?.id,
+        team_lead: teamLead.id,
         start_date: start_date ? new Date(start_date) : null,
         end_date: end_date ? new Date(end_date) : null,
       },
@@ -102,7 +115,6 @@ export const updateProject = async (req, res) => {
     const { userId } = await req.auth();
     const {
       id,
-      workspaceId,
       description,
       name,
       status,
@@ -112,47 +124,53 @@ export const updateProject = async (req, res) => {
       priority,
     } = req.body;
 
-    // Check if user has admin role for workspace
-    const workspace = await prisma.workspace.findUnique({
-      where: { id: workspaceId },
-      include: { members: { include: { user: true } } },
-    });
-
-    if (!workspace) {
-      return res.status(404).json({ message: "Workspace not found" });
+    if (!id) {
+      return res.status(400).json({ message: "Project id is required" });
     }
 
-    if (
-      !workspace.members.some(
-        (member) => member.userId === userId && member.role === "ADMIN"
-      )
-    ) {
-      const project = await prisma.project.findUnique({
-        where: { id },
-      });
+    // Authorize against the project's REAL workspace, not a workspaceId from
+    // the body (which could point at a workspace the caller controls).
+    const existing = await prisma.project.findUnique({
+      where: { id },
+      include: {
+        workspace: { include: { members: true } },
+      },
+    });
 
-      if (!project) {
-        return res.status(404).json({ message: "Project not found" });
-      } else if (project.team_lead !== userId) {
-        return res.status(403).json({
-          message:
-            "You don't have permission to update projects in this workspace",
-        });
-      }
+    if (!existing) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    const isAdmin = existing.workspace.members.some(
+      (member) => member.userId === userId && member.role === "ADMIN"
+    );
+    const isLead = existing.team_lead === userId;
+
+    if (!isAdmin && !isLead) {
+      return res.status(403).json({
+        message: "You don't have permission to update this project",
+      });
+    }
+
+    // Whitelist updatable fields; skip (undefined) rather than null when a field
+    // is omitted so partial updates don't wipe existing values. workspaceId is
+    // intentionally NOT updatable here (no re-parenting via this endpoint).
+    const data = {};
+    if (name !== undefined) data.name = name;
+    if (description !== undefined) data.description = description;
+    if (status !== undefined) data.status = status;
+    if (priority !== undefined) data.priority = priority;
+    if (progress !== undefined) data.progress = progress;
+    if (start_date !== undefined) {
+      data.start_date = start_date ? new Date(start_date) : null;
+    }
+    if (end_date !== undefined) {
+      data.end_date = end_date ? new Date(end_date) : null;
     }
 
     const project = await prisma.project.update({
       where: { id },
-      data: {
-        workspaceId,
-        description,
-        name,
-        status,
-        priority,
-        progress,
-        start_date: start_date ? new Date(start_date) : null,
-        end_date: end_date ? new Date(end_date) : null,
-      },
+      data,
     });
 
     res.json({ project, message: "Project updated successfully" });
@@ -181,7 +199,7 @@ export const addMember = async (req, res) => {
 
     if (project.team_lead !== userId) {
       return res
-        .status(404)
+        .status(403)
         .json({ message: "Only project lead can add members" });
     }
 
