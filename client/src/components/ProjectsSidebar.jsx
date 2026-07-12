@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useSelector } from "react-redux";
 
-const ProjectSidebar = () => {
+const ProjectSidebar = ({ setIsSidebarOpen }) => {
   const location = useLocation();
 
   const [expandedProjects, setExpandedProjects] = useState(new Set());
@@ -54,7 +54,10 @@ const ProjectSidebar = () => {
         <h3 className="text-xs font-medium text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
           Projects
         </h3>
-        <Link to="/projects">
+        <Link 
+          to="/projects"
+          onClick={() => setIsSidebarOpen && setIsSidebarOpen(false)}
+        >
           <button className="size-5 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-zinc-800 rounded flex items-center justify-center transition-colors duration-200">
             <ArrowRightIcon className="size-3" />
           </button>
@@ -90,6 +93,7 @@ const ProjectSidebar = () => {
                     <Link
                       key={subItem.title}
                       to={subItem.url}
+                      onClick={() => setIsSidebarOpen && setIsSidebarOpen(false)}
                       className={`flex items-center gap-3 px-3 py-1.5 rounded-lg transition-colors duration-200 text-xs ${
                         isActive
                           ? "bg-blue-100 text-blue-600 hover:bg-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20"
