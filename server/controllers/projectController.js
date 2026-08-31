@@ -32,10 +32,9 @@ export const createProject = async (req, res) => {
         (member) => member.userId === userId && member.role === "ADMIN"
       )
     ) {
-      return res.status(403).json({
-        message:
-          "You don't have permission to create projects in this workspace",
-      });
+      return res
+        .status(403)
+        .json({ message: MESSAGES.PROJECT_CREATE_DENIED });
     }
 
     if (!name) {
