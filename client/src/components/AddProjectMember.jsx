@@ -1,44 +1,69 @@
 import { useState } from "react";
-import { Mail, UserPlus } from "lucide-react";
+import { Mail, UserPlus, XIcon } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { useSearchParams } from "react-router-dom";
-import { useAuth } from "../lib/auth";
+import { useAuth, useUser } from "../lib/auth";
+import { canAddProjectMember } from "../lib/permissions";
 import api from "../configs/api";
 import toast from "react-hot-toast";
 import { fetchWorkspaces } from "../features/workspaceSlice";
+import Modal from "./Modal";
+import useMessages from "../hooks/useMessages";
+import { Button, Tooltip, inputClass, labelClass } from "../ui";
 
 const AddProjectMember = ({ isDialogOpen, setIsDialogOpen }) => {
+  const { msg } = useMessages();
   const [searchParams] = useSearchParams();
 
   const id = searchParams.get("id");
 
   const { getToken } = useAuth();
+  const { user } = useUser();
   const dispatch = useDispatch();
 
   const currentWorkspace = useSelector(
     (state) => state.workspace?.currentWorkspace || null
   );
 
-  const project = currentWorkspace?.projects.find((p) => p.id === id);
-  const projectMembersEmails = project?.members.map(
-    (member) => member.user.email
+  const project = currentWorkspace?.projects?.find((p) => p.id === id);
+  // Default to an empty list — this used to be undefined whenever the project
+  // had not resolved, and the `.includes()` below threw while rendering.
+  const projectMemberEmails = (project?.members || []).map(
+    (member) => member?.user?.email
   );
+  const availableMembers = (currentWorkspace?.members || []).filter(
+    (member) => !projectMemberEmails.includes(member?.user?.email)
+  );
+  // Server-side this endpoint is project-lead only. Checked here as well so the
+  // dialog cannot submit a doomed request if it is ever opened another way.
+  const canAdd = canAddProjectMember(project, user?.id);
 
   const [email, setEmail] = useState("");
   const [isAdding, setIsAdding] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!project) {
+      toast.error(msg("PROJECT_NOT_SELECTED"));
+      return;
+    }
+    if (!canAdd) {
+      toast.error(msg("PROJECT_MEMBER_ADD_DENIED"));
+      return;
+    }
+
     setIsAdding(true);
 
     try {
-      await api.post(
+      const { data } = await api.post(
         `/api/projects/${project.id}/addMember`,
         { email },
         { headers: { Authorization: `Bearer ${await getToken()}` } }
       );
 
-      toast.success("Added to project successfully");
+      toast.success(data.message);
+      setEmail("");
       setIsDialogOpen(false);
       dispatch(fetchWorkspaces({ getToken }));
     } catch (error) {
@@ -48,82 +73,103 @@ const AddProjectMember = ({ isDialogOpen, setIsDialogOpen }) => {
     }
   };
 
-  if (!isDialogOpen) return null;
-
   return (
-    <div className="fixed inset-0 bg-black/20 dark:bg-black/50 backdrop-blur flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-xl p-6 w-full max-w-md text-zinc-900 dark:text-zinc-200">
-        {/* Header */}
-        <div className="mb-4">
-          <h2 className="text-xl font-bold flex items-center gap-2">
-            <UserPlus className="size-5 text-zinc-900 dark:text-zinc-200" /> Add
-            Member to Project
-          </h2>
-          {currentWorkspace && (
-            <p className="text-sm text-zinc-700 dark:text-zinc-400">
-              Adding to Project:{" "}
-              <span className="text-blue-600 dark:text-blue-400">
-                {project.name}
-              </span>
-            </p>
-          )}
+    <Modal
+      isOpen={isDialogOpen}
+      onClose={() => setIsDialogOpen(false)}
+      labelledBy="add-project-member-title"
+      panelClassName="max-w-md"
+    >
+      <div className="relative bg-white border border-slate-200 rounded-2xl shadow-xl p-6">
+        <button
+          type="button"
+          aria-label="Close dialog"
+          className="absolute top-4 right-4 w-7 h-7 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition-colors"
+          onClick={() => setIsDialogOpen(false)}
+        >
+          <XIcon size={15} strokeWidth={2.2} />
+        </button>
+
+        <div className="flex items-start gap-3 mb-5 pr-8">
+          <span className="w-9 h-9 shrink-0 rounded-xl bg-violet-50 text-violet-500 flex items-center justify-center">
+            <UserPlus size={17} strokeWidth={2.2} />
+          </span>
+          <div className="min-w-0">
+            <h2
+              id="add-project-member-title"
+              className="text-[16px] font-bold text-slate-900"
+            >
+              Add Member to Project
+            </h2>
+            {project && (
+              <p className="text-[12px] text-slate-500 truncate">
+                to{" "}
+                <span className="font-semibold text-sky-600">
+                  {project.name}
+                </span>
+              </p>
+            )}
+          </div>
         </div>
 
-        {/* Form */}
+        {!canAdd && (
+          <div className="mb-5 px-3.5 py-3 rounded-xl bg-slate-50 border border-slate-100 text-[12px] text-slate-600">
+            {msg("PROJECT_MEMBER_ADD_DENIED")}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Email */}
-          <div className="space-y-2">
-            <label
-              htmlFor="email"
-              className="text-sm font-medium text-zinc-900 dark:text-zinc-200"
-            >
-              Email Address
+          <div>
+            <label htmlFor="project-member-email" className={labelClass}>
+              Workspace Member
             </label>
             <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 dark:text-zinc-400 w-4 h-4" />
-              {/* List All non project members from current workspace */}
+              <Mail
+                size={14}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+              />
+              {/* Lists all non-project members from the current workspace */}
               <select
+                id="project-member-email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="pl-10 mt-1 w-full rounded border border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-200 text-sm placeholder-zinc-400 dark:placeholder-zinc-500 py-2 focus:outline-none focus:border-blue-500"
+                disabled={!canAdd}
+                className={`${inputClass} pl-9`}
                 required
               >
                 <option value="">Select a member</option>
-                {currentWorkspace?.members
-                  .filter(
-                    (member) =>
-                      !projectMembersEmails.includes(member.user.email)
-                  )
-                  .map((member) => (
-                    <option key={member.user.id} value={member.user.email}>
-                      {" "}
-                      {member.user.email}{" "}
-                    </option>
-                  ))}
+                {availableMembers.map((member) => (
+                  <option key={member.user.id} value={member.user.email}>
+                    {member.user.email}
+                  </option>
+                ))}
               </select>
             </div>
+            {availableMembers.length === 0 && (
+              <p className="mt-1.5 text-[11px] text-slate-400">
+                Every workspace member is already on this project.
+              </p>
+            )}
           </div>
 
-          {/* Footer */}
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={() => setIsDialogOpen(false)}
-              className="px-5 py-2 text-sm rounded border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-800 transition"
-            >
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="secondary" onClick={() => setIsDialogOpen(false)}>
               Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isAdding || !currentWorkspace}
-              className="px-5 py-2 text-sm rounded bg-gradient-to-br from-blue-500 to-blue-600 hover:opacity-90 text-white disabled:opacity-50 transition"
+            </Button>
+            <Tooltip
+              title={canAdd ? undefined : msg("PROJECT_MEMBER_ADD_DENIED")}
             >
-              {isAdding ? "Adding..." : "Add Member"}
-            </button>
+              <Button
+                type="submit"
+                disabled={isAdding || !project || !email || !canAdd}
+              >
+                {isAdding ? "Adding..." : "Add Member"}
+              </Button>
+            </Tooltip>
           </div>
         </form>
       </div>
-    </div>
+    </Modal>
   );
 };
 

@@ -1,4 +1,7 @@
-import { Routes, Route } from "react-router-dom";
+import { useEffect } from "react";
+import { useDispatch } from "react-redux";
+import { Routes, Route, Navigate } from "react-router-dom";
+import { fetchMessages } from "./features/messagesSlice";
 import Layout from "./pages/Layout";
 import { Toaster } from "react-hot-toast";
 import Dashboard from "./pages/Dashboard";
@@ -9,9 +12,17 @@ import TaskDetails from "./pages/TaskDetails";
 import SignIn from "./pages/SignIn";
 import SignUp from "./pages/SignUp";
 import CreateOrganization from "./components/CreateOrganization";
-import Profile from "./pages/Profile";
+import Settings from "./pages/Settings";
 
 const App = () => {
+  const dispatch = useDispatch();
+
+  // Load the server message catalog once. Every piece of user-facing error or
+  // permission copy is read from here or from a response, never hardcoded.
+  useEffect(() => {
+    dispatch(fetchMessages());
+  }, [dispatch]);
+
   return (
     <>
       <Toaster />
@@ -26,7 +37,9 @@ const App = () => {
           <Route path="projectsDetail" element={<ProjectDetails />} />
           <Route path="taskDetails" element={<TaskDetails />} />
           <Route path="create-organization" element={<CreateOrganization />} />
-          <Route path="profile" element={<Profile />} />
+          <Route path="settings" element={<Settings />} />
+          {/* Kept so older links and bookmarks still resolve. */}
+          <Route path="profile" element={<Navigate to="/settings" replace />} />
         </Route>
       </Routes>
     </>

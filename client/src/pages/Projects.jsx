@@ -1,105 +1,101 @@
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useSelector } from "react-redux";
 import { useUser } from "../lib/auth";
 import useVisibleProjects from "../hooks/useVisibleProjects";
 import { Plus, Search, FolderOpen } from "lucide-react";
 import ProjectCard from "../components/ProjectCard";
 import CreateProjectDialog from "../components/CreateProjectDialog";
+import { canCreateProject } from "../lib/permissions";
+import useMessages from "../hooks/useMessages";
+import { Button, EmptyState, PageHeader, Tooltip, inputClass } from "../ui";
 
 export default function Projects() {
+  const { msg } = useMessages();
   const projects = useVisibleProjects();
   const { user } = useUser();
 
-  const currentWorkspace = useSelector((state) => state.workspace.currentWorkspace);
-  const isAdmin = currentWorkspace?.members?.some(
-    (m) => ((m.userId === user?.id) || (m.user && m.user.id === user?.id)) && m.role === "ADMIN"
+  const currentWorkspace = useSelector(
+    (state) => state.workspace.currentWorkspace
   );
+  const isAdmin = canCreateProject(currentWorkspace, user?.id);
 
-  const [filteredProjects, setFilteredProjects] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [filters, setFilters] = useState({
-    status: "ALL",
-    priority: "ALL",
-  });
+  const [filters, setFilters] = useState({ status: "ALL", priority: "ALL" });
 
-  const filterProjects = () => {
-    let filtered = projects;
+  // Derived rather than state written by an effect, so the grid is correct on
+  // the very first render instead of briefly showing "No projects found".
+  const filteredProjects = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
 
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (project) =>
-          project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          project.description?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    if (filters.status !== "ALL") {
-      filtered = filtered.filter(
-        (project) => project.status === filters.status
-      );
-    }
-
-    if (filters.priority !== "ALL") {
-      filtered = filtered.filter(
-        (project) => project.priority === filters.priority
-      );
-    }
-
-    setFilteredProjects(filtered);
-  };
-
-  useEffect(() => {
-    filterProjects();
+    return projects.filter((project) => {
+      if (
+        term &&
+        !project.name?.toLowerCase().includes(term) &&
+        !project.description?.toLowerCase().includes(term)
+      ) {
+        return false;
+      }
+      if (filters.status !== "ALL" && project.status !== filters.status) {
+        return false;
+      }
+      if (filters.priority !== "ALL" && project.priority !== filters.priority) {
+        return false;
+      }
+      return true;
+    });
   }, [projects, searchTerm, filters]);
 
-  return (
-    <div className="space-y-6 max-w-6xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 dark:text-white mb-1">
-            {" "}
-            Projects{" "}
-          </h1>
-          <p className="text-gray-500 dark:text-zinc-400 text-sm">
-            {" "}
-            Manage and track your projects{" "}
-          </p>
-        </div>
-        <button
-          onClick={() => isAdmin && setIsDialogOpen(true)}
-          disabled={!isAdmin}
-          className={`flex items-center px-5 py-2 text-sm rounded ${
-            isAdmin
-              ? "bg-gradient-to-br from-blue-500 to-blue-600 text-white hover:opacity-90"
-              : "bg-zinc-200 text-zinc-500 cursor-not-allowed"
-          } transition`}
-          title={!isAdmin ? "Only workspace admins can create projects" : "Create new project"}
-        >
-          <Plus className="size-4 mr-2" /> New Project
-        </button>
-        <CreateProjectDialog
-          isDialogOpen={isDialogOpen}
-          setIsDialogOpen={setIsDialogOpen}
-        />
-      </div>
+  const isFiltered =
+    Boolean(searchTerm.trim()) ||
+    filters.status !== "ALL" ||
+    filters.priority !== "ALL";
 
-      {/* Search and Filters */}
-      <div className="flex flex-col md:flex-row gap-4">
-        <div className="relative w-full max-w-sm">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-zinc-400 w-4 h-4" />
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Projects"
+        subtitle="Manage and track everything you are part of"
+        actions={
+          <Tooltip
+            title={isAdmin ? "Create new project" : msg("PROJECT_CREATE_DENIED")}
+          >
+            <Button
+              onClick={() => isAdmin && setIsDialogOpen(true)}
+              disabled={!isAdmin}
+            >
+              <Plus size={15} strokeWidth={2.4} />
+              New Project
+            </Button>
+          </Tooltip>
+        }
+      />
+
+      {/* Search and filters */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative w-full sm:max-w-xs">
+          <label htmlFor="project-search" className="sr-only">
+            Search projects
+          </label>
+          <Search
+            size={14}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+          />
           <input
-            onChange={(e) => setSearchTerm(e.target.value)}
+            id="project-search"
+            type="search"
             value={searchTerm}
-            className="w-full pl-10 text-sm pr-4 py-2 rounded-lg border border-gray-300 dark:border-zinc-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-400 focus:border-blue-500 outline-none"
+            onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search projects..."
+            className={`${inputClass} pl-9`}
           />
         </div>
+
         <select
+          aria-label="Filter by status"
           value={filters.status}
           onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-          className="px-3 py-2 rounded-lg border border-gray-300 dark:border-zinc-700 text-gray-900 dark:text-white text-sm"
+          className={`${inputClass} sm:w-40`}
         >
           <option value="ALL">All Status</option>
           <option value="ACTIVE">Active</option>
@@ -108,10 +104,12 @@ export default function Projects() {
           <option value="ON_HOLD">On Hold</option>
           <option value="CANCELLED">Cancelled</option>
         </select>
+
         <select
+          aria-label="Filter by priority"
           value={filters.priority}
           onChange={(e) => setFilters({ ...filters, priority: e.target.value })}
-          className="px-3 py-2 rounded-lg border border-gray-300 dark:border-zinc-700 text-gray-900 dark:text-white text-sm"
+          className={`${inputClass} sm:w-40`}
         >
           <option value="ALL">All Priority</option>
           <option value="HIGH">High</option>
@@ -120,39 +118,58 @@ export default function Projects() {
         </select>
       </div>
 
-      {/* Projects Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredProjects.length === 0 ? (
-          <div className="col-span-full text-center py-16">
-            <div className="w-24 h-24 mx-auto mb-6 bg-gray-200 dark:bg-zinc-800 rounded-full flex items-center justify-center">
-              <FolderOpen className="w-12 h-12 text-gray-400 dark:text-zinc-500" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
-              No projects found
-            </h3>
-            <p className="text-gray-500 dark:text-zinc-400 mb-6 text-sm">
-              Create your first project to get started
-            </p>
-            <button
-              onClick={() => isAdmin && setIsDialogOpen(true)}
-              disabled={!isAdmin}
-              title={!isAdmin ? "Only workspace admins can create projects" : "Create project"}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded mx-auto text-sm transition ${
-                isAdmin
-                  ? "bg-blue-500 hover:bg-blue-600 text-white"
-                  : "bg-zinc-200 text-zinc-500 cursor-not-allowed"
-              }`}
-            >
-              <Plus className="size-4" />
-              Create Project
-            </button>
-          </div>
-        ) : (
-          filteredProjects.map((project) => (
+      {/* Grid */}
+      {filteredProjects.length === 0 ? (
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm">
+          <EmptyState
+            icon={FolderOpen}
+            title={isFiltered ? "No projects match your filters" : "No projects yet"}
+            hint={
+              isFiltered
+                ? "Try a different search term or clear the filters"
+                : "Create your first project to get started"
+            }
+            action={
+              isFiltered ? (
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setSearchTerm("");
+                    setFilters({ status: "ALL", priority: "ALL" });
+                  }}
+                >
+                  Clear filters
+                </Button>
+              ) : (
+                <Tooltip
+                  title={
+                    isAdmin ? "Create project" : msg("PROJECT_CREATE_DENIED")
+                  }
+                >
+                  <Button
+                    onClick={() => isAdmin && setIsDialogOpen(true)}
+                    disabled={!isAdmin}
+                  >
+                    <Plus size={15} strokeWidth={2.4} />
+                    Create Project
+                  </Button>
+                </Tooltip>
+              )
+            }
+          />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {filteredProjects.map((project) => (
             <ProjectCard key={project.id} project={project} />
-          ))
-        )}
-      </div>
+          ))}
+        </div>
+      )}
+
+      <CreateProjectDialog
+        isDialogOpen={isDialogOpen}
+        setIsDialogOpen={setIsDialogOpen}
+      />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import prisma from "../configs/prisma.js";
+import { MESSAGES } from "../constants/messages.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
@@ -8,13 +9,13 @@ export const register = async (req, res) => {
     const { name, email, password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({ message: "Email and password are required" });
+      return res.status(400).json({ message: MESSAGES.AUTH_CREDENTIALS_REQUIRED });
     }
 
     const existing = await prisma.user.findUnique({ where: { email } });
 
     if (existing) {
-      return res.status(400).json({ message: "User already exists" });
+      return res.status(400).json({ message: MESSAGES.AUTH_USER_EXISTS });
     }
 
     const hashed = await bcrypt.hash(password, 10);
@@ -47,7 +48,7 @@ export const login = async (req, res) => {
     console.log("[auth] login attempt for:", email);
 
     if (!email || !password) {
-      return res.status(400).json({ message: "Email and password are required" });
+      return res.status(400).json({ message: MESSAGES.AUTH_CREDENTIALS_REQUIRED });
     }
 
     const user = await prisma.user.findUnique({ where: { email } });
@@ -55,7 +56,7 @@ export const login = async (req, res) => {
     console.log("[auth] user found:", !!user);
 
     if (!user || !user.password) {
-      return res.status(400).json({ message: "Invalid credentials" });
+      return res.status(400).json({ message: MESSAGES.AUTH_INVALID_CREDENTIALS });
     }
 
     const match = await bcrypt.compare(password, user.password);
@@ -63,7 +64,7 @@ export const login = async (req, res) => {
     console.log("[auth] password match:", match);
 
     if (!match) {
-      return res.status(400).json({ message: "Invalid credentials" });
+      return res.status(400).json({ message: MESSAGES.AUTH_INVALID_CREDENTIALS });
     }
 
     const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET);
@@ -79,14 +80,14 @@ export const me = async (req, res) => {
   try {
     const { userId } = await req.auth();
 
-    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    if (!userId) return res.status(401).json({ message: MESSAGES.AUTH_UNAUTHORIZED });
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { id: true, name: true, email: true, image: true, createdAt: true },
     });
 
-    if (!user) return res.status(404).json({ message: "User not found" });
+    if (!user) return res.status(404).json({ message: MESSAGES.USER_NOT_FOUND });
 
     res.json({ user });
   } catch (error) {

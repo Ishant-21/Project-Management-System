@@ -11,52 +11,79 @@ import {
   GitCommit,
   MessageSquare,
   Square,
-  Trash,
+  Trash2,
   XIcon,
   Zap,
+  ListX,
 } from "lucide-react";
 import { useAuth } from "../lib/auth";
+import { canManageTasks, canEditTask } from "../lib/permissions";
+import useMessages from "../hooks/useMessages";
+import { formatEnumLabel } from "../lib/format";
+import { PRIORITY_TONE, TASK_TYPE_TONE } from "../lib/tone";
 import api from "../configs/api";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Tooltip,
+  filterClass,
+  inputClass,
+} from "../ui";
 
-const typeIcons = {
-  BUG: { icon: Bug, color: "text-red-600 dark:text-red-400" },
-  FEATURE: { icon: Zap, color: "text-blue-600 dark:text-blue-400" },
-  TASK: { icon: Square, color: "text-green-600 dark:text-green-400" },
-  IMPROVEMENT: {
-    icon: GitCommit,
-    color: "text-purple-600 dark:text-purple-400",
-  },
-  OTHER: { icon: MessageSquare, color: "text-amber-600 dark:text-amber-400" },
+const TYPE_ICONS = {
+  BUG: Bug,
+  FEATURE: Zap,
+  TASK: Square,
+  IMPROVEMENT: GitCommit,
+  OTHER: MessageSquare,
 };
 
-const priorityTexts = {
-  LOW: {
-    background: "bg-red-100 dark:bg-red-950",
-    prioritycolor: "text-red-600 dark:text-red-400",
-  },
-  MEDIUM: {
-    background: "bg-blue-100 dark:bg-blue-950",
-    prioritycolor: "text-blue-600 dark:text-blue-400",
-  },
-  HIGH: {
-    background: "bg-emerald-100 dark:bg-emerald-950",
-    prioritycolor: "text-emerald-600 dark:text-emerald-400",
-  },
+const FILTER_OPTIONS = {
+  status: [
+    { label: "All Statuses", value: "" },
+    { label: "To Do", value: "TODO" },
+    { label: "In Progress", value: "IN_PROGRESS" },
+    { label: "Done", value: "DONE" },
+  ],
+  type: [
+    { label: "All Types", value: "" },
+    { label: "Task", value: "TASK" },
+    { label: "Bug", value: "BUG" },
+    { label: "Feature", value: "FEATURE" },
+    { label: "Improvement", value: "IMPROVEMENT" },
+    { label: "Other", value: "OTHER" },
+  ],
+  priority: [
+    { label: "All Priorities", value: "" },
+    { label: "Low", value: "LOW" },
+    { label: "Medium", value: "MEDIUM" },
+    { label: "High", value: "HIGH" },
+  ],
 };
 
-const ProjectTasks = ({ tasks }) => {
+const ProjectTasks = ({ tasks, project }) => {
+  const { msg } = useMessages();
   const { getToken } = useAuth();
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const [selectedTasks, setSelectedTasks] = useState([]);
 
   const { user } = useUser();
-  const currentWorkspace = useSelector((state) => state.workspace.currentWorkspace);
+  const currentWorkspace = useSelector(
+    (state) => state.workspace.currentWorkspace
+  );
 
-  const projectLead = currentWorkspace?.projects?.find(
-    (p) => p.id === tasks?.[0]?.projectId
-  )?.team_lead;
-  const isLead = projectLead === user?.id;
+  // The project arrives as a prop. It used to be looked up via
+  // `tasks[0].projectId`, which resolved to undefined for an empty task list —
+  // so the project lead's own controls stayed locked on a project with no tasks.
+  const activeProject =
+    project ||
+    currentWorkspace?.projects?.find((p) => p.id === tasks?.[0]?.projectId);
+  const isLead = canManageTasks(activeProject, user?.id);
+  // The lead may edit any task in the project; anyone else only their own.
+  const mayEditTask = (task) => canEditTask(activeProject, task, user?.id);
 
   const [filters, setFilters] = useState({
     status: "",
@@ -67,12 +94,14 @@ const ProjectTasks = ({ tasks }) => {
 
   const assigneeList = useMemo(
     () =>
-      Array.from(new Set(tasks.map((t) => t.assignee?.name).filter(Boolean))),
+      Array.from(
+        new Set((tasks || []).map((t) => t.assignee?.name).filter(Boolean))
+      ),
     [tasks]
   );
 
   const filteredTasks = useMemo(() => {
-    return tasks.filter((task) => {
+    return (tasks || []).filter((task) => {
       const { status, type, priority, assignee } = filters;
       return (
         (!status || task.status === status) &&
@@ -83,28 +112,47 @@ const ProjectTasks = ({ tasks }) => {
     });
   }, [filters, tasks]);
 
+  const hasFilters =
+    filters.status || filters.type || filters.priority || filters.assignee;
+
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
     setFilters((prev) => ({ ...prev, [name]: value }));
   };
 
+  const openTask = (task) =>
+    navigate(`/taskDetails?projectId=${task.projectId}&taskId=${task.id}`);
+
+  const toggleSelected = (taskId) =>
+    setSelectedTasks((prev) =>
+      prev.includes(taskId)
+        ? prev.filter((i) => i !== taskId)
+        : [...prev, taskId]
+    );
+
   const handleStatusChange = async (taskId, newStatus) => {
+    const target = (tasks || []).find((t) => t.id === taskId);
+    if (!mayEditTask(target)) {
+      toast.error(msg("TASK_EDIT_DENIED"));
+      return;
+    }
+
     try {
       toast.loading("Updating status...");
       const token = await getToken();
 
-      await api.put(
+      const { data } = await api.put(
         `/api/tasks/${taskId}`,
         { status: newStatus },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      let updatedTask = structuredClone(tasks.find((t) => t.id === taskId));
-      updatedTask.status = newStatus;
-      dispatch(updateTask(updatedTask));
+      // updateTask returns the task with its assignee relation, so use the
+      // server copy instead of patching a local clone.
+      dispatch(updateTask(data.task));
 
       toast.dismissAll();
-      toast.success("Task status updated successfully");
+      toast.success(data.message);
     } catch (error) {
       toast.dismissAll();
       toast.error(error?.response?.data?.message || error.message);
@@ -113,332 +161,352 @@ const ProjectTasks = ({ tasks }) => {
 
   const handleDelete = async () => {
     try {
-      const confirm = window.confirm(
+      const confirmed = window.confirm(
         "Are you sure you want to delete the selected tasks?"
       );
-      if (!confirm) return;
+      if (!confirmed) return;
+      if (!isLead) {
+        toast.error(msg("TASK_DELETE_DENIED"));
+        return;
+      }
 
       const token = await getToken();
-
       toast.loading("Deleting tasks...");
 
-      await api.post(
+      const { data } = await api.post(
         "/api/tasks/delete",
         { tasksIds: selectedTasks },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
       dispatch(deleteTask(selectedTasks));
+      // Clear the selection, otherwise the Delete button lingers and the
+      // select-all checkbox stays checked against rows that no longer exist.
+      setSelectedTasks([]);
 
       toast.dismissAll();
-      toast.success("Tasks deleted successfully");
+      toast.success(data.message);
     } catch (error) {
       toast.dismissAll();
       toast.error(error?.response?.data?.message || error.message);
     }
   };
 
-  return (
-    <div>
-      {/* Filters */}
-      <div className="flex flex-wrap gap-4 mb-4">
-        {["status", "type", "priority", "assignee"].map((name) => {
-          const options = {
-            status: [
-              { label: "All Statuses", value: "" },
-              { label: "To Do", value: "TODO" },
-              { label: "In Progress", value: "IN_PROGRESS" },
-              { label: "Done", value: "DONE" },
-            ],
-            type: [
-              { label: "All Types", value: "" },
-              { label: "Task", value: "TASK" },
-              { label: "Bug", value: "BUG" },
-              { label: "Feature", value: "FEATURE" },
-              { label: "Improvement", value: "IMPROVEMENT" },
-              { label: "Other", value: "OTHER" },
-            ],
-            priority: [
-              { label: "All Priorities", value: "" },
-              { label: "Low", value: "LOW" },
-              { label: "Medium", value: "MEDIUM" },
-              { label: "High", value: "HIGH" },
-            ],
-            assignee: [
-              { label: "All Assignees", value: "" },
-              ...assigneeList.map((n) => ({ label: n, value: n })),
-            ],
-          };
-          return (
-            <select
-              key={name}
-              name={name}
-              onChange={handleFilterChange}
-              className=" border not-dark:bg-white border-zinc-300 dark:border-zinc-800 outline-none px-3 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200"
-            >
-              {options[name].map((opt, idx) => (
-                <option key={idx} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          );
-        })}
+  const allSelected =
+    filteredTasks.length > 0 && selectedTasks.length === filteredTasks.length;
 
-        {/* Reset filters */}
-        {(filters.status ||
-          filters.type ||
-          filters.priority ||
-          filters.assignee) && (
-          <button
-            type="button"
+  return (
+    <div className="space-y-4">
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-2">
+        {["status", "type", "priority"].map((name) => (
+          // Controlled: without `value` the Reset button cleared the filters in
+          // state while the dropdowns kept showing the old selections.
+          <select
+            key={name}
+            name={name}
+            value={filters[name]}
+            aria-label={`Filter by ${name}`}
+            onChange={handleFilterChange}
+            className={filterClass}
+          >
+            {FILTER_OPTIONS[name].map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        ))}
+
+        <select
+          name="assignee"
+          value={filters.assignee}
+          aria-label="Filter by assignee"
+          onChange={handleFilterChange}
+          className={filterClass}
+        >
+          <option value="">All Assignees</option>
+          {assigneeList.map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </select>
+
+        {hasFilters && (
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() =>
               setFilters({ status: "", type: "", priority: "", assignee: "" })
             }
-            className="px-3 py-1 flex items-center gap-2 rounded bg-gradient-to-br from-purple-400 to-purple-500 text-zinc-100 dark:text-zinc-200 text-sm transition-colors"
           >
-            <XIcon className="size-3" /> Reset
-          </button>
+            <XIcon size={12} strokeWidth={2.4} />
+            Reset
+          </Button>
         )}
 
         {selectedTasks.length > 0 && (
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={!isLead}
-            title={!isLead ? "Only project lead can delete tasks" : undefined}
-            className={`px-3 py-1 flex items-center gap-2 rounded text-sm transition ${
-              isLead
-                ? "bg-gradient-to-br from-indigo-400 to-indigo-500 text-zinc-100"
-                : "bg-zinc-200 text-zinc-500 cursor-not-allowed"
-            }`}
+          <Tooltip
+            title={!isLead ? msg("TASK_DELETE_DENIED") : undefined}
+            className="ml-auto"
           >
-            <Trash className="size-3" /> Delete
-          </button>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={handleDelete}
+              disabled={!isLead}
+            >
+              <Trash2 size={12} strokeWidth={2.4} />
+              Delete ({selectedTasks.length})
+            </Button>
+          </Tooltip>
         )}
       </div>
 
-      {/* Tasks Table */}
-      <div className="overflow-auto rounded-lg lg:border border-zinc-300 dark:border-zinc-800">
-        <div className="w-full">
-          {/* Desktop/Table View */}
-          <div className="hidden lg:block overflow-x-auto">
-            <table className="min-w-full text-sm text-left not-dark:bg-white text-zinc-900 dark:text-zinc-300">
-              <thead className="text-xs uppercase dark:bg-zinc-800/70 text-zinc-500 dark:text-zinc-400 ">
-                <tr>
-                  <th className="pl-2 pr-1">
-                    <input
-                      onChange={() =>
-                        selectedTasks.length === filteredTasks.length
-                          ? setSelectedTasks([])
-                          : setSelectedTasks(filteredTasks.map((t) => t.id))
-                      }
-                      checked={
-                        filteredTasks.length > 0 &&
-                        selectedTasks.length === filteredTasks.length
-                      }
-                      type="checkbox"
-                      className="size-3 accent-zinc-600 dark:accent-zinc-500"
-                    />
-                  </th>
-                  <th className="px-4 pl-0 py-3">Title</th>
-                  <th className="px-4 py-3">Type</th>
-                  <th className="px-4 py-3">Priority</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Assignee</th>
-                  <th className="px-4 py-3">Due Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredTasks.length > 0 ? (
-                  filteredTasks.map((task) => {
-                    const { icon: Icon, color } = typeIcons[task.type] || {};
-                    const { background, prioritycolor } =
-                      priorityTexts[task.priority] || {};
+      {filteredTasks.length === 0 ? (
+        <Card>
+          <EmptyState
+            icon={ListX}
+            title="No tasks found"
+            hint={
+              hasFilters
+                ? "No tasks match the selected filters"
+                : "Tasks created for this project will appear here"
+            }
+          />
+        </Card>
+      ) : (
+        <>
+          {/* Desktop table */}
+          <Card className="hidden lg:block overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left">
+                <thead className="bg-slate-50 border-b border-slate-100">
+                  <tr>
+                    <th className="pl-5 pr-2 py-3 w-10">
+                      <input
+                        type="checkbox"
+                        aria-label="Select all tasks"
+                        onChange={() =>
+                          allSelected
+                            ? setSelectedTasks([])
+                            : setSelectedTasks(filteredTasks.map((t) => t.id))
+                        }
+                        checked={allSelected}
+                      />
+                    </th>
+                    {[
+                      "Title",
+                      "Type",
+                      "Priority",
+                      "Status",
+                      "Assignee",
+                      "Due",
+                    ].map((h) => (
+                      <th
+                        key={h}
+                        className="px-4 py-3 label-micro text-slate-500 whitespace-nowrap"
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredTasks.map((task) => {
+                    const TypeIcon = TYPE_ICONS[task.type] || Square;
+                    const editable = mayEditTask(task);
 
                     return (
                       <tr
                         key={task.id}
-                        onClick={() =>
-                          navigate(
-                            `/taskDetails?projectId=${task.projectId}&taskId=${task.id}`
-                          )
-                        }
-                        className=" border-t border-zinc-300 dark:border-zinc-800 group hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-all cursor-pointer"
+                        onClick={() => openTask(task)}
+                        className="hover:bg-slate-50 transition-colors cursor-pointer"
                       >
                         <td
                           onClick={(e) => e.stopPropagation()}
-                          className="pl-2 pr-1"
+                          className="pl-5 pr-2 py-3"
                         >
                           <input
                             type="checkbox"
-                            className="size-3 accent-zinc-600 dark:accent-zinc-500"
-                            onChange={() =>
-                              selectedTasks.includes(task.id)
-                                ? setSelectedTasks(
-                                    selectedTasks.filter((i) => i !== task.id)
-                                  )
-                                : setSelectedTasks((prev) => [...prev, task.id])
-                            }
+                            aria-label={`Select ${task.title}`}
+                            onChange={() => toggleSelected(task.id)}
                             checked={selectedTasks.includes(task.id)}
                           />
                         </td>
-                        <td className="px-4 pl-0 py-2">{task.title}</td>
-                        <td className="px-4 py-2">
-                          <div className="flex items-center gap-2">
-                            {Icon && <Icon className={`size-4 ${color}`} />}
-                            <span className={`uppercase text-xs ${color}`}>
-                              {task.type}
-                            </span>
-                          </div>
+                        <td className="px-4 py-3 text-[13px] font-semibold text-slate-800 max-w-xs truncate">
+                          {task.title}
                         </td>
-                        <td className="px-4 py-2">
-                          <span
-                            className={`text-xs px-2 py-1 rounded ${background} ${prioritycolor}`}
-                          >
-                            {task.priority}
+                        <td className="px-4 py-3">
+                          <span className="flex items-center gap-1.5 text-[12px] text-slate-600">
+                            <TypeIcon
+                              size={13}
+                              strokeWidth={2.2}
+                              className="text-slate-400"
+                            />
+                            {formatEnumLabel(task.type)}
                           </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge
+                            variant={PRIORITY_TONE[task.priority] || "default"}
+                            size="sm"
+                          >
+                            {formatEnumLabel(task.priority)}
+                          </Badge>
                         </td>
                         <td
                           onClick={(e) => e.stopPropagation()}
-                          className="px-4 py-2"
+                          className="px-4 py-3"
                         >
-                          <select
-                            name="status"
-                            onChange={(e) =>
-                              handleStatusChange(task.id, e.target.value)
+                          <Tooltip
+                            title={
+                              editable ? undefined : msg("TASK_EDIT_DENIED")
                             }
-                            value={task.status}
-                            disabled={!isLead}
-                            title={!isLead ? "Only project lead can update status" : undefined}
-                            className="group-hover:ring ring-zinc-100 outline-none px-2 pr-4 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200 cursor-pointer disabled:opacity-50"
                           >
-                            <option value="TODO">To Do</option>
-                            <option value="IN_PROGRESS">In Progress</option>
-                            <option value="DONE">Done</option>
-                          </select>
+                            <select
+                              name="status"
+                              aria-label={`Status for ${task.title}`}
+                              onChange={(e) =>
+                                handleStatusChange(task.id, e.target.value)
+                              }
+                              value={task.status}
+                              disabled={!editable}
+                              className="px-2 py-1 text-[12px] font-medium rounded-lg border border-slate-200 bg-white text-slate-700 focus:outline-none focus:border-sky-400 disabled:bg-slate-50 disabled:text-slate-400"
+                            >
+                              <option value="TODO">To Do</option>
+                              <option value="IN_PROGRESS">In Progress</option>
+                              <option value="DONE">Done</option>
+                            </select>
+                          </Tooltip>
                         </td>
-                        <td className="px-4 py-2">
-                          <div className="flex items-center gap-2">
-                            <img
-                              src={task.assignee?.image || "/profile.svg"}
-                              className="size-5 rounded-full"
-                              alt="avatar"
+                        <td className="px-4 py-3">
+                          <span className="flex items-center gap-2 text-[12px] text-slate-600">
+                            <span className="w-6 h-6 shrink-0 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center text-[10px] font-bold">
+                              {task.assignee?.name?.[0]?.toUpperCase() || "?"}
+                            </span>
+                            {task.assignee?.name || "Unassigned"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-[12px] text-slate-500 whitespace-nowrap">
+                          <span className="flex items-center gap-1.5">
+                            <CalendarIcon
+                              size={12}
+                              strokeWidth={2}
+                              className="text-slate-400"
                             />
-                            {task.assignee?.name || "-"}
-                          </div>
-                        </td>
-                        <td className="px-4 py-2">
-                          <div className="flex items-center gap-1 text-zinc-600 dark:text-zinc-400">
-                            <CalendarIcon className="size-4" />
-                            {task.due_date ? format(new Date(task.due_date), "dd MMMM") : "—"}
-                          </div>
+                            {task.due_date
+                              ? format(new Date(task.due_date), "dd MMM")
+                              : "None"}
+                          </span>
                         </td>
                       </tr>
                     );
-                  })
-                ) : (
-                  <tr>
-                    <td
-                      colSpan="7"
-                      className="text-center text-zinc-500 dark:text-zinc-400 py-6"
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          {/* Mobile cards — clickable like the desktop rows */}
+          <div className="lg:hidden space-y-3">
+            {filteredTasks.map((task) => {
+              const TypeIcon = TYPE_ICONS[task.type] || Square;
+              const editable = mayEditTask(task);
+
+              return (
+                <Card
+                  key={task.id}
+                  role="link"
+                  tabIndex={0}
+                  onClick={() => openTask(task)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      openTask(task);
+                    }
+                  }}
+                  className="p-4 cursor-pointer"
+                >
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <h3 className="text-[13px] font-bold text-slate-800">
+                      {task.title}
+                    </h3>
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${task.title}`}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={() => toggleSelected(task.id)}
+                      checked={selectedTasks.includes(task.id)}
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 mb-3">
+                    <Badge
+                      variant={TASK_TYPE_TONE[task.type] || "default"}
+                      size="sm"
                     >
-                      No tasks found for the selected filters.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                      <TypeIcon size={11} strokeWidth={2.4} />
+                      {formatEnumLabel(task.type)}
+                    </Badge>
+                    <Badge
+                      variant={PRIORITY_TONE[task.priority] || "default"}
+                      size="sm"
+                    >
+                      {formatEnumLabel(task.priority)}
+                    </Badge>
+                  </div>
 
-          {/* Mobile/Card View */}
-          <div className="lg:hidden flex flex-col gap-4">
-            {filteredTasks.length > 0 ? (
-              filteredTasks.map((task) => {
-                const { icon: Icon, color } = typeIcons[task.type] || {};
-                const { background, prioritycolor } =
-                  priorityTexts[task.priority] || {};
-
-                return (
-                  <div
-                    key={task.id}
-                    className=" dark:bg-gradient-to-br dark:from-zinc-800/70 dark:to-zinc-900/50 border border-zinc-300 dark:border-zinc-800 rounded-lg p-4 flex flex-col gap-2"
-                  >
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-zinc-900 dark:text-zinc-200 text-sm font-semibold">
-                        {task.title}
-                      </h3>
-                      <input
-                        type="checkbox"
-                        className="size-4 accent-zinc-600 dark:accent-zinc-500"
-                        onChange={() =>
-                          selectedTasks.includes(task.id)
-                            ? setSelectedTasks(
-                                selectedTasks.filter((i) => i !== task.id)
-                              )
-                            : setSelectedTasks((prev) => [...prev, task.id])
-                        }
-                        checked={selectedTasks.includes(task.id)}
-                      />
-                    </div>
-
-                    <div className="text-xs text-zinc-600 dark:text-zinc-400 flex items-center gap-2">
-                      {Icon && <Icon className={`size-4 ${color}`} />}
-                      <span className={`${color} uppercase`}>{task.type}</span>
-                    </div>
-
-                    <div>
-                      <span
-                        className={`text-xs px-2 py-1 rounded ${background} ${prioritycolor}`}
-                      >
-                        {task.priority}
-                      </span>
-                    </div>
-
-                    <div>
-                      <label className="text-zinc-600 dark:text-zinc-400 text-xs">
-                        Status
-                      </label>
+                  <div onClick={(e) => e.stopPropagation()} className="mb-3">
+                    <label
+                      htmlFor={`status-${task.id}`}
+                      className="label-micro text-slate-400 block mb-1.5"
+                    >
+                      Status
+                    </label>
+                    <Tooltip
+                      title={editable ? undefined : msg("TASK_EDIT_DENIED")}
+                      className="w-full"
+                    >
                       <select
+                        id={`status-${task.id}`}
                         name="status"
+                        aria-label={`Status for ${task.title}`}
                         onChange={(e) =>
                           handleStatusChange(task.id, e.target.value)
                         }
                         value={task.status}
-                        disabled={!isLead}
-                        title={!isLead ? "Only project lead can update status" : undefined}
-                        className="w-full mt-1 bg-zinc-100 dark:bg-zinc-800 ring-1 ring-zinc-300 dark:ring-zinc-700 outline-none px-2 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200 disabled:opacity-50"
+                        disabled={!editable}
+                        className={inputClass}
                       >
                         <option value="TODO">To Do</option>
                         <option value="IN_PROGRESS">In Progress</option>
                         <option value="DONE">Done</option>
                       </select>
-                    </div>
-
-                    <div className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-                      <img
-                        src={task.assignee?.image || "/profile.svg"}
-                        className="size-5 rounded-full"
-                        alt="avatar"
-                      />
-                      {task.assignee?.name || "-"}
-                    </div>
-
-                    <div className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
-                      <CalendarIcon className="size-4" />
-                      {task.due_date ? format(new Date(task.due_date), "dd MMMM") : "—"}
-                    </div>
+                    </Tooltip>
                   </div>
-                );
-              })
-            ) : (
-              <p className="text-center text-zinc-500 dark:text-zinc-400 py-4">
-                No tasks found for the selected filters.
-              </p>
-            )}
+
+                  <div className="flex items-center justify-between text-[12px] text-slate-500">
+                    <span className="flex items-center gap-2">
+                      <span className="w-6 h-6 shrink-0 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center text-[10px] font-bold">
+                        {task.assignee?.name?.[0]?.toUpperCase() || "?"}
+                      </span>
+                      {task.assignee?.name || "Unassigned"}
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <CalendarIcon size={12} strokeWidth={2} />
+                      {task.due_date
+                        ? format(new Date(task.due_date), "dd MMM")
+                        : "None"}
+                    </span>
+                  </div>
+                </Card>
+              );
+            })}
           </div>
-        </div>
-      </div>
+        </>
+      )}
     </div>
   );
 };

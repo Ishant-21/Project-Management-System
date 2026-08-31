@@ -1,41 +1,45 @@
 import { useState } from "react";
-import { XIcon } from "lucide-react";
+import { XIcon, FolderPlus } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { useUser } from "../lib/auth";
 import toast from "react-hot-toast";
 import api from "../configs/api";
 import { useAuth } from "../lib/auth";
 import { addProject } from "../features/workspaceSlice";
+import Modal from "./Modal";
+import { canCreateProject } from "../lib/permissions";
+import useMessages from "../hooks/useMessages";
+import { Badge, Button, Tooltip, inputClass, labelClass } from "../ui";
+
+const EMPTY_FORM = {
+  name: "",
+  description: "",
+  status: "PLANNING",
+  priority: "MEDIUM",
+  start_date: "",
+  end_date: "",
+  team_members: [],
+  team_lead: "",
+};
 
 const CreateProjectDialog = ({ isDialogOpen, setIsDialogOpen }) => {
+  const { msg } = useMessages();
   const { getToken } = useAuth();
   const dispatch = useDispatch();
 
   const { currentWorkspace } = useSelector((state) => state.workspace);
   const { user } = useUser();
-  const isAdmin = currentWorkspace?.members?.some(
-    (m) => ((m.userId === user?.id) || (m.user && m.user.id === user?.id)) && m.role === "ADMIN"
-  );
+  // Mirrors the server rule in one place — see lib/permissions.js
+  const isAdmin = canCreateProject(currentWorkspace, user?.id);
 
-  const [formData, setFormData] = useState({
-    name: "",
-    description: "",
-    status: "PLANNING",
-    priority: "MEDIUM",
-    start_date: "",
-    end_date: "",
-    team_members: [],
-    team_lead: "",
-    progress: 0,
-  });
-
+  const [formData, setFormData] = useState(EMPTY_FORM);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      if (!formData.team_lead) {
-        return toast.error("Please select a team lead");
+      if (!isAdmin) {
+        return toast.error(msg("PROJECT_CREATE_DENIED"));
       }
 
       setIsSubmitting(true);
@@ -54,19 +58,10 @@ const CreateProjectDialog = ({ isDialogOpen, setIsDialogOpen }) => {
       );
 
       dispatch(addProject(data.project));
+      toast.success(data.message);
       setIsDialogOpen(false);
       // Reset so reopening the dialog starts fresh instead of showing stale data.
-      setFormData({
-        name: "",
-        description: "",
-        status: "PLANNING",
-        priority: "MEDIUM",
-        start_date: "",
-        end_date: "",
-        team_members: [],
-        team_lead: "",
-        progress: 0,
-      });
+      setFormData(EMPTY_FORM);
     } catch (error) {
       toast.error(error?.response?.data?.message || error.message);
     } finally {
@@ -81,227 +76,260 @@ const CreateProjectDialog = ({ isDialogOpen, setIsDialogOpen }) => {
     }));
   };
 
-  if (!isDialogOpen) return null;
+  const workspaceMembers = currentWorkspace?.members || [];
 
   return (
-    <div className="fixed inset-0 bg-black/20 dark:bg-black/60 backdrop-blur flex items-center justify-center text-left z-50">
-      <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 w-full max-w-lg text-zinc-900 dark:text-zinc-200 relative">
+    <Modal
+      isOpen={isDialogOpen}
+      onClose={() => setIsDialogOpen(false)}
+      labelledBy="create-project-title"
+      panelClassName="max-w-lg"
+    >
+      <div className="relative bg-white border border-slate-200 rounded-2xl shadow-xl p-6">
         <button
-          className="absolute top-3 right-3 text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+          type="button"
+          aria-label="Close dialog"
+          className="absolute top-4 right-4 w-7 h-7 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition-colors"
           onClick={() => setIsDialogOpen(false)}
         >
-          <XIcon className="size-5" />
+          <XIcon size={15} strokeWidth={2.2} />
         </button>
 
-        <h2 className="text-xl font-medium mb-1">Create New Project</h2>
-        {currentWorkspace && (
-          <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-4">
-            In workspace:{" "}
-            <span className="text-blue-600 dark:text-blue-400">
-              {currentWorkspace.name}
-            </span>
-          </p>
+        <div className="flex items-start gap-3 mb-5 pr-8">
+          <span className="w-9 h-9 shrink-0 rounded-xl bg-sky-50 text-sky-500 flex items-center justify-center">
+            <FolderPlus size={17} strokeWidth={2.2} />
+          </span>
+          <div className="min-w-0">
+            <h2
+              id="create-project-title"
+              className="text-[16px] font-bold text-slate-900"
+            >
+              Create New Project
+            </h2>
+            {currentWorkspace && (
+              <p className="text-[12px] text-slate-500 truncate">
+                in{" "}
+                <span className="font-semibold text-sky-600">
+                  {currentWorkspace.name}
+                </span>
+              </p>
+            )}
+          </div>
+        </div>
+
+        {!isAdmin && (
+          <div className="mb-5 px-3.5 py-3 rounded-xl bg-slate-50 border border-slate-100 text-[12px] text-slate-600">
+            {msg("PROJECT_CREATE_DENIED")}
+          </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {!isAdmin && (
-            <div className="p-3 mb-2 text-sm bg-zinc-50 dark:bg-zinc-900 rounded text-zinc-700 dark:text-zinc-300">
-              Only workspace admins can create projects in this workspace.
-            </div>
-          )}
-          {/* Project Name */}
-          <div>
-            <label className="block text-sm mb-1">Project Name</label>
-            <input
-              type="text"
-              value={formData.name}
-              onChange={(e) =>
-                setFormData({ ...formData, name: e.target.value })
-              }
-              placeholder="Enter project name"
-              className="w-full px-3 py-2 rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 mt-1 text-zinc-900 dark:text-zinc-200 text-sm"
-              required
-            />
-          </div>
-
-          {/* Description */}
-          <div>
-            <label className="block text-sm mb-1">Description</label>
-            <textarea
-              value={formData.description}
-              onChange={(e) =>
-                setFormData({ ...formData, description: e.target.value })
-              }
-              placeholder="Describe your project"
-              className="w-full px-3 py-2 rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 mt-1 text-zinc-900 dark:text-zinc-200 text-sm h-20"
-            />
-          </div>
-
-          {/* Status & Priority */}
-          <div className="grid grid-cols-2 gap-4">
+        <form onSubmit={handleSubmit}>
+          {/* Disabled fieldset so a non-admin gets the not-allowed cursor on
+              every field, rather than a form that fills in and then 403s. */}
+          <fieldset disabled={!isAdmin} className="space-y-4 min-w-0">
             <div>
-              <label className="block text-sm mb-1">Status</label>
-              <select
-                value={formData.status}
-                onChange={(e) =>
-                  setFormData({ ...formData, status: e.target.value })
-                }
-                className="w-full px-3 py-2 rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 mt-1 text-zinc-900 dark:text-zinc-200 text-sm"
-              >
-                <option value="PLANNING">Planning</option>
-                <option value="ACTIVE">Active</option>
-                <option value="COMPLETED">Completed</option>
-                <option value="ON_HOLD">On Hold</option>
-                <option value="CANCELLED">Cancelled</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm mb-1">Priority</label>
-              <select
-                value={formData.priority}
-                onChange={(e) =>
-                  setFormData({ ...formData, priority: e.target.value })
-                }
-                className="w-full px-3 py-2 rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 mt-1 text-zinc-900 dark:text-zinc-200 text-sm"
-              >
-                <option value="LOW">Low</option>
-                <option value="MEDIUM">Medium</option>
-                <option value="HIGH">High</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Dates */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm mb-1">Start Date</label>
+              <label htmlFor="cp-name" className={labelClass}>
+                Project Name
+              </label>
               <input
-                type="date"
-                value={formData.start_date}
+                id="cp-name"
+                type="text"
+                value={formData.name}
                 onChange={(e) =>
-                  setFormData({ ...formData, start_date: e.target.value })
+                  setFormData({ ...formData, name: e.target.value })
                 }
-                className="w-full px-3 py-2 rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 mt-1 text-zinc-900 dark:text-zinc-200 text-sm"
+                placeholder="Enter project name"
+                className={inputClass}
+                required
               />
             </div>
+
             <div>
-              <label className="block text-sm mb-1">End Date</label>
-              <input
-                type="date"
-                value={formData.end_date}
+              <label htmlFor="cp-description" className={labelClass}>
+                Description
+              </label>
+              <textarea
+                id="cp-description"
+                value={formData.description}
                 onChange={(e) =>
-                  setFormData({ ...formData, end_date: e.target.value })
+                  setFormData({ ...formData, description: e.target.value })
                 }
-                min={
-                  formData.start_date &&
-                  new Date(formData.start_date).toISOString().split("T")[0]
-                }
-                className="w-full px-3 py-2 rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 mt-1 text-zinc-900 dark:text-zinc-200 text-sm"
+                placeholder="Describe your project"
+                className={`${inputClass} h-20 resize-none`}
               />
             </div>
-          </div>
 
-          {/* Lead */}
-          <div>
-            <label className="block text-sm mb-1">Project Lead</label>
-            <select
-              value={formData.team_lead}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  team_lead: e.target.value,
-                  team_members: e.target.value
-                    ? [...new Set([...formData.team_members, e.target.value])]
-                    : formData.team_members,
-                })
-              }
-              className="w-full px-3 py-2 rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 mt-1 text-zinc-900 dark:text-zinc-200 text-sm"
-            >
-              <option value="">No lead</option>
-              {currentWorkspace?.members?.map((member) => (
-                <option key={member.user.email} value={member.user.email}>
-                  {member.user.email}
-                </option>
-              ))}
-            </select>
-          </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="cp-status" className={labelClass}>
+                  Status
+                </label>
+                <select
+                  id="cp-status"
+                  value={formData.status}
+                  onChange={(e) =>
+                    setFormData({ ...formData, status: e.target.value })
+                  }
+                  className={inputClass}
+                >
+                  <option value="PLANNING">Planning</option>
+                  <option value="ACTIVE">Active</option>
+                  <option value="COMPLETED">Completed</option>
+                  <option value="ON_HOLD">On Hold</option>
+                  <option value="CANCELLED">Cancelled</option>
+                </select>
+              </div>
 
-          {/* Team Members */}
-          <div>
-            <label className="block text-sm mb-1">Team Members</label>
-            <select
-              className="w-full px-3 py-2 rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 mt-1 text-zinc-900 dark:text-zinc-200 text-sm"
-              onChange={(e) => {
-                if (
-                  e.target.value &&
-                  !formData.team_members.includes(e.target.value)
-                ) {
-                  setFormData((prev) => ({
-                    ...prev,
-                    team_members: [...prev.team_members, e.target.value],
-                  }));
+              <div>
+                <label htmlFor="cp-priority" className={labelClass}>
+                  Priority
+                </label>
+                <select
+                  id="cp-priority"
+                  value={formData.priority}
+                  onChange={(e) =>
+                    setFormData({ ...formData, priority: e.target.value })
+                  }
+                  className={inputClass}
+                >
+                  <option value="LOW">Low</option>
+                  <option value="MEDIUM">Medium</option>
+                  <option value="HIGH">High</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="cp-start" className={labelClass}>
+                  Start Date
+                </label>
+                <input
+                  id="cp-start"
+                  type="date"
+                  value={formData.start_date}
+                  onChange={(e) =>
+                    setFormData({ ...formData, start_date: e.target.value })
+                  }
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label htmlFor="cp-end" className={labelClass}>
+                  End Date
+                </label>
+                <input
+                  id="cp-end"
+                  type="date"
+                  value={formData.end_date}
+                  // start_date is already a yyyy-MM-dd string from the date
+                  // input; round-tripping it through toISOString() shifted it a
+                  // day for users behind UTC.
+                  min={formData.start_date || undefined}
+                  onChange={(e) =>
+                    setFormData({ ...formData, end_date: e.target.value })
+                  }
+                  className={inputClass}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="cp-lead" className={labelClass}>
+                Project Lead
+              </label>
+              <select
+                id="cp-lead"
+                value={formData.team_lead}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    team_lead: e.target.value,
+                    team_members: e.target.value
+                      ? [...new Set([...formData.team_members, e.target.value])]
+                      : formData.team_members,
+                  })
                 }
-              }}
-            >
-              <option value="">Add team members</option>
-              {currentWorkspace?.members
-                ?.filter(
-                  (member) =>
-                    !formData.team_members.includes(member.user.email)
-                )
-                .map((member) => (
+                className={inputClass}
+              >
+                <option value="">No lead</option>
+                {workspaceMembers.map((member) => (
                   <option key={member.user.email} value={member.user.email}>
                     {member.user.email}
                   </option>
                 ))}
-            </select>
+              </select>
+            </div>
 
-            {formData.team_members.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-2">
-                {formData.team_members.map((email) => (
-                  <div
-                    key={email}
-                    className="flex items-center gap-1 bg-blue-200/50 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 px-2 py-1 rounded-md text-sm"
-                  >
-                    {email}
-                    <button
-                      type="button"
-                      onClick={() => removeTeamMember(email)}
-                      className="ml-1 hover:bg-blue-300/30 dark:hover:bg-blue-500/30 rounded"
-                    >
-                      <XIcon className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+            <div>
+              <label htmlFor="cp-members" className={labelClass}>
+                Team Members
+              </label>
+              <select
+                id="cp-members"
+                value=""
+                className={inputClass}
+                onChange={(e) => {
+                  if (
+                    e.target.value &&
+                    !formData.team_members.includes(e.target.value)
+                  ) {
+                    setFormData((prev) => ({
+                      ...prev,
+                      team_members: [...prev.team_members, e.target.value],
+                    }));
+                  }
+                }}
+              >
+                <option value="">Add team members</option>
+                {workspaceMembers
+                  .filter(
+                    (member) =>
+                      !formData.team_members.includes(member.user.email)
+                  )
+                  .map((member) => (
+                    <option key={member.user.email} value={member.user.email}>
+                      {member.user.email}
+                    </option>
+                  ))}
+              </select>
 
-          {/* Footer */}
-          <div className="flex justify-end gap-3 pt-2 text-sm">
-            <button
-              type="button"
-              onClick={() => setIsDialogOpen(false)}
-              className="px-4 py-2 rounded border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-800"
-            >
+              {formData.team_members.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2.5">
+                  {formData.team_members.map((email) => (
+                    <Badge key={email} variant="brand" className="pr-1.5">
+                      {email}
+                      <button
+                        type="button"
+                        aria-label={`Remove ${email}`}
+                        onClick={() => removeTeamMember(email)}
+                        className="ml-0.5 w-4 h-4 rounded flex items-center justify-center hover:bg-sky-100 transition-colors"
+                      >
+                        <XIcon size={10} strokeWidth={3} />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+          </fieldset>
+
+          <div className="flex justify-end gap-2 pt-5">
+            <Button variant="secondary" onClick={() => setIsDialogOpen(false)}>
               Cancel
-            </button>
-            <button
-              disabled={isSubmitting || !currentWorkspace || !isAdmin}
-              title={!isAdmin ? "Only workspace admins can create projects" : undefined}
-              className={`px-4 py-2 rounded text-white dark:text-zinc-200 transition ${
-                isAdmin
-                  ? "bg-gradient-to-br from-blue-500 to-blue-600"
-                  : "bg-zinc-200 text-zinc-500 cursor-not-allowed"
-              }`}
-            >
-              {isSubmitting ? "Creating..." : "Create Project"}
-            </button>
+            </Button>
+            <Tooltip title={isAdmin ? undefined : msg("PROJECT_CREATE_DENIED")}>
+              <Button
+                type="submit"
+                disabled={isSubmitting || !currentWorkspace || !isAdmin}
+              >
+                {isSubmitting ? "Creating..." : "Create Project"}
+              </Button>
+            </Tooltip>
           </div>
         </form>
       </div>
-    </div>
+    </Modal>
   );
 };
 

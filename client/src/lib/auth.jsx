@@ -1,236 +1,171 @@
-import { useState, useEffect } from "react";
-import { useSelector } from "react-redux";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { LogOut, Settings as SettingsIcon, ChevronDown } from "lucide-react";
 import api from "../configs/api";
+import { AuthContext } from "./authContext";
+import { useAuth, useUser } from "./authHooks";
 
-// Simple client-side auth hooks that use localStorage + /auth/me
-export const useAuth = () => {
-  return {
-    getToken: () => localStorage.getItem("token"),
-    setToken: (t) => localStorage.setItem("token", t),
-    clearToken: () => localStorage.removeItem("token"),
-  };
-};
+// Loads the signed-in user exactly once for the whole tree. Every `useUser()`
+// caller reads this shared record instead of issuing its own /auth/me.
+export const AuthProvider = ({ children }) => {
+  const [state, setState] = useState({ user: null, isLoaded: false });
+  const mountedRef = useRef(true);
 
-export const useUser = () => {
-  const [user, setUser] = useState(null);
-  const [isLoaded, setLoaded] = useState(false);
+  const load = useCallback(async () => {
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      if (mountedRef.current) setState({ user: null, isLoaded: true });
+      return;
+    }
+
+    try {
+      const { data } = await api.get("/auth/me");
+      if (mountedRef.current) {
+        setState({ user: data.user || null, isLoaded: true });
+      }
+    } catch {
+      localStorage.removeItem("token");
+      if (mountedRef.current) setState({ user: null, isLoaded: true });
+    }
+  }, []);
 
   useEffect(() => {
-    let mounted = true;
-    const load = async () => {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        if (mounted) {
-          setUser(null);
-          setLoaded(true);
-        }
-        return;
-      }
-
-      try {
-        const { data } = await api.get("/auth/me");
-        if (mounted) {
-          setUser(data.user || null);
-        }
-      } catch (e) {
-        localStorage.removeItem("token");
-        if (mounted) setUser(null);
-      } finally {
-        if (mounted) setLoaded(true);
-      }
-    };
-
-    // Load once on mount
+    mountedRef.current = true;
     load();
 
-    // Re-load when other parts of the app dispatch an auth change (login/logout)
+    // Re-read when another part of the app changes auth state (login/logout).
     const handleAuthChange = () => {
-      // reset loaded flag while refreshing
-      if (mounted) setLoaded(false);
+      setState((prev) => ({ ...prev, isLoaded: false }));
       load();
     };
 
     window.addEventListener("auth:change", handleAuthChange);
 
     return () => {
-      mounted = false;
+      mountedRef.current = false;
       window.removeEventListener("auth:change", handleAuthChange);
     };
-  }, []);
+  }, [load]);
 
-  return { user, isLoaded };
-};
-
-export const useClerk = () => {
-  const navigate = useNavigate();
-
-  return {
-    openUserProfile: () => {
-      navigate("/profile");
-    },
-    openCreateOrganization: () => {
-      navigate("/create-organization");
-    },
-  };
-};
-
-export const useOrganizationList = (opts = {}) => {
-  const [userMemberships, setUserMemberships] = useState({ data: [] });
-  const [isLoaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    let mounted = true;
-
-    const load = async () => {
-      try {
-        const { data } = await api.get("/api/workspaces");
-        if (!mounted) return;
-
-        const mapped = (data?.workspaces || []).map((ws) => ({
-          organization: {
-            id: ws.id,
-            imageUrl: ws.image_url || ws.imageUrl || "/workspace.svg",
-            name: ws.name,
-            membersCount: ws.members?.length || 0,
-          },
-        }));
-
-        setUserMemberships({ data: mapped });
-      } catch (e) {
-        setUserMemberships({ data: [] });
-      } finally {
-        if (mounted) setLoaded(true);
-      }
-    };
-
-    load();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  const setActive = ({ organization }) => {
-    try {
-      // store the workspace id under the same key the redux slice reads
-      const id = typeof organization === "string" ? organization : organization?.id;
-      if (id) localStorage.setItem("currentWorkspaceId", id);
-    } catch (e) {}
-  };
-
-  return { setActive, userMemberships, isLoaded };
-};
-
-export const useOrganization = () => {
-  const [organization, setOrganization] = useState(null);
-  // Prefer the live workspace from Redux; fall back to localStorage. Reading
-  // localStorage only once (as before) could target a stale/absent workspace
-  // on first login, before currentWorkspaceId was written.
-  const currentWorkspaceId = useSelector(
-    (state) => state.workspace?.currentWorkspace?.id || null
+  return (
+    <AuthContext.Provider
+      value={{ user: state.user, isLoaded: state.isLoaded, refresh: load }}
+    >
+      {children}
+    </AuthContext.Provider>
   );
-
-  useEffect(() => {
-    const workspaceId =
-      currentWorkspaceId || localStorage.getItem("currentWorkspaceId");
-
-    if (!workspaceId) {
-      setOrganization(null);
-      return;
-    }
-
-    const org = {
-      id: workspaceId,
-      inviteMember: async ({ emailAddress, role, message } = {}) => {
-        if (!emailAddress || !role) {
-          throw new Error("Missing email or role");
-        }
-
-        // Map client role values to server role values
-        const mappedRole = role === "org:admin" ? "ADMIN" : "MEMBER";
-
-        const body = {
-          email: emailAddress,
-          role: mappedRole,
-          workspaceId,
-          message: message || "",
-        };
-
-        const res = await api.post("/api/workspaces/add-member", body);
-        return res.data;
-      },
-    };
-
-    setOrganization(org);
-  }, [currentWorkspaceId]);
-
-  return { organization };
 };
-
-import { useNavigate } from "react-router-dom";
-import React from "react";
 
 export const UserButton = () => {
   const { user, isLoaded } = useUser();
   const auth = useAuth();
   const navigate = useNavigate();
+  const containerRef = useRef(null);
 
   const [open, setOpen] = useState(false);
+
+  // Close the menu when clicking anywhere outside it.
+  useEffect(() => {
+    if (!open) return;
+
+    const handleClickOutside = (event) => {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
 
   const handleLogout = () => {
     auth.clearToken();
     navigate("/signin");
   };
 
-  if (!isLoaded) return null;
+  // Reserve the button footprint while auth resolves so the header does not
+  // shift once the user arrives.
+  if (!isLoaded) {
+    return <div className="h-8 w-24 rounded-xl bg-white/5 animate-pulse" />;
+  }
 
   if (!user) {
     return (
       <button
+        type="button"
         onClick={() => navigate("/signin")}
-        className="px-3 py-1 text-sm rounded bg-blue-600 text-white"
+        className="text-[13px] font-semibold px-3.5 py-1.5 rounded-xl bg-sky-500 text-white hover:bg-sky-600 transition-colors"
       >
         Sign in
       </button>
     );
   }
 
+  const initial = (user.name?.[0] || "?").toUpperCase();
+
   return (
-    <div className="relative">
+    <div className="relative" ref={containerRef}>
       <button
+        type="button"
         onClick={() => setOpen((v) => !v)}
-        className="px-3 py-1 text-sm rounded bg-white dark:bg-zinc-800 shadow flex items-center gap-2"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all"
       >
-        <span className="hidden sm:block">Account</span>
-        <span className="sm:hidden text-sm">{user.name?.split(" ")[0] || "Me"}</span>
+        <span className="w-6 h-6 rounded-lg bg-sky-500 shadow-lg shadow-sky-500/20 flex items-center justify-center text-[11px] font-bold text-white">
+          {initial}
+        </span>
+        <span className="hidden sm:block text-[13px] font-semibold text-slate-200 max-w-24 truncate">
+          {user.name?.split(" ")[0] || "Account"}
+        </span>
+        <ChevronDown size={13} className="text-slate-500" />
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded p-3 shadow z-50">
-          <div className="text-sm text-zinc-900 dark:text-zinc-200 mb-2">
-            <span className="font-medium">current user :</span>
-            <span className="ml-2 truncate">{user.name}</span>
+        <div className="absolute right-0 top-full mt-2 w-56 z-50 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-100">
+            <p className="label-micro text-slate-400 mb-1">Signed in as</p>
+            <p className="text-[13px] font-bold text-slate-800 truncate">
+              {user.name}
+            </p>
+            <p className="text-[11px] text-slate-400 truncate">{user.email}</p>
           </div>
+
           <button
+            type="button"
             onClick={() => {
-              handleLogout();
+              navigate("/settings");
               setOpen(false);
             }}
-            className="w-full px-3 py-1 text-sm rounded bg-red-600 text-white"
+            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors"
           >
-            Logout
+            <SettingsIcon size={14} strokeWidth={2} className="text-slate-400" />
+            Settings
           </button>
+
+          <div className="p-1.5 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => {
+                handleLogout();
+                setOpen(false);
+              }}
+              className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] font-semibold text-rose-600 hover:bg-rose-50 transition-colors"
+            >
+              <LogOut size={14} strokeWidth={2} />
+              Sign out
+            </button>
+          </div>
         </div>
       )}
     </div>
   );
-};
-
-export default {
-  useAuth,
-  useUser,
-  useClerk,
-  useOrganizationList,
-  useOrganization,
-  UserButton,
 };

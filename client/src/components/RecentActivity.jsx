@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
+import { Link } from "react-router-dom";
 import {
   GitCommit,
   MessageSquare,
@@ -6,136 +7,111 @@ import {
   Bug,
   Zap,
   Square,
+  Activity,
 } from "lucide-react";
 import { format } from "date-fns";
 import { useSelector } from "react-redux";
-import { useUser } from "../lib/auth";
 import useVisibleProjects from "../hooks/useVisibleProjects";
+import { formatEnumLabel } from "../lib/format";
+import { TASK_STATUS_TONE } from "../lib/tone";
+import { Badge, EmptyState, SectionCard } from "../ui";
 
-const typeIcons = {
-  BUG: { icon: Bug, color: "text-red-500 dark:text-red-400" },
-  FEATURE: { icon: Zap, color: "text-blue-500 dark:text-blue-400" },
-  TASK: { icon: Square, color: "text-green-500 dark:text-green-400" },
-  IMPROVEMENT: {
-    icon: MessageSquare,
-    color: "text-amber-500 dark:text-amber-400",
-  },
-  OTHER: { icon: GitCommit, color: "text-purple-500 dark:text-purple-400" },
-};
-
-const statusColors = {
-  TODO: "bg-zinc-200 text-zinc-800 dark:bg-zinc-600 dark:text-zinc-200",
-  IN_PROGRESS:
-    "bg-amber-200 text-amber-800 dark:bg-amber-500 dark:text-amber-900",
-  DONE: "bg-emerald-200 text-emerald-800 dark:bg-emerald-500 dark:text-emerald-900",
+const TYPE_ICONS = {
+  BUG: { icon: Bug, chip: "bg-rose-50 text-rose-500" },
+  FEATURE: { icon: Zap, chip: "bg-violet-50 text-violet-500" },
+  TASK: { icon: Square, chip: "bg-sky-50 text-sky-500" },
+  IMPROVEMENT: { icon: MessageSquare, chip: "bg-indigo-50 text-indigo-500" },
+  OTHER: { icon: GitCommit, chip: "bg-slate-100 text-slate-500" },
 };
 
 const RecentActivity = () => {
-  const [tasks, setTasks] = useState([]);
   const { currentWorkspace } = useSelector((state) => state.workspace);
-  const { user } = useUser();
   const visibleProjects = useVisibleProjects();
 
-  const getTasksFromCurrentWorkspace = () => {
-    if (!currentWorkspace) return;
+  // Derived instead of effect-written state, so the list cannot lag behind the
+  // data it renders.
+  const tasks = useMemo(() => {
+    if (!currentWorkspace) return [];
 
-    const tasks = (visibleProjects || []).flatMap(
+    const all = (visibleProjects || []).flatMap(
       (project) => project.tasks || []
     );
-    // Show the most recently updated tasks first, capped to a short list.
-    const recent = [...tasks]
+
+    // Most recently updated first, capped to a short list.
+    return [...all]
       .sort(
         (a, b) =>
           new Date(b.updatedAt || b.createdAt || 0) -
           new Date(a.updatedAt || a.createdAt || 0)
       )
       .slice(0, 8);
-    setTasks(recent);
-  };
-
-  useEffect(() => {
-    getTasksFromCurrentWorkspace();
-  }, [currentWorkspace, user]);
+  }, [currentWorkspace, visibleProjects]);
 
   return (
-    <div className="bg-white dark:bg-zinc-950 dark:bg-gradient-to-br dark:from-zinc-800/70 dark:to-zinc-900/50 border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 rounded-lg transition-all overflow-hidden">
-      <div className="border-b border-zinc-200 dark:border-zinc-800 p-4">
-        <h2 className="text-lg text-zinc-800 dark:text-zinc-200">
-          Recent Activity
-        </h2>
-      </div>
+    <SectionCard title="Recent Activity" icon={Activity}>
+      {tasks.length === 0 ? (
+        <EmptyState
+          icon={Clock}
+          title="No recent activity"
+          hint="Task updates will show up here"
+        />
+      ) : (
+        <div className="divide-y divide-slate-100">
+          {tasks.map((task) => {
+            const meta = TYPE_ICONS[task.type] || TYPE_ICONS.OTHER;
+            const TypeIcon = meta.icon;
 
-      <div className="p-0">
-        {tasks.length === 0 ? (
-          <div className="p-12 text-center">
-            <div className="w-16 h-16 mx-auto mb-4 bg-zinc-200 dark:bg-zinc-800 rounded-full flex items-center justify-center">
-              <Clock className="w-8 h-8 text-zinc-600 dark:text-zinc-500" />
-            </div>
-            <p className="text-zinc-600 dark:text-zinc-400">
-              No recent activity
-            </p>
-          </div>
-        ) : (
-          <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
-            {tasks.map((task) => {
-              const TypeIcon = typeIcons[task.type]?.icon || Square;
-              const iconColor =
-                typeIcons[task.type]?.color ||
-                "text-gray-500 dark:text-gray-400";
-
-              return (
-                <div
-                  key={task.id}
-                  className="p-6 hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors"
+            return (
+              <Link
+                key={task.id}
+                to={`/taskDetails?projectId=${task.projectId}&taskId=${task.id}`}
+                className="flex items-start gap-3 px-5 py-3.5 hover:bg-slate-50 transition-colors group"
+              >
+                <span
+                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center ${meta.chip}`}
                 >
-                  <div className="flex items-start gap-4">
-                    <div className="p-2 bg-zinc-200 dark:bg-zinc-800 rounded-lg">
-                      <TypeIcon className={`w-4 h-4 ${iconColor}`} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between mb-2">
-                        <h4 className="text-zinc-800 dark:text-zinc-200 truncate">
-                          {task.title}
-                        </h4>
-                        <span
-                          className={`ml-2 px-2 py-1 rounded text-xs ${
-                            statusColors[task.status] ||
-                            "bg-zinc-300 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300"
-                          }`}
-                        >
-                          {task.status.replace("_", " ")}
+                  <TypeIcon size={14} strokeWidth={2.2} />
+                </span>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <h4 className="text-[13px] font-semibold text-slate-800 truncate group-hover:text-sky-600 transition-colors">
+                      {task.title}
+                    </h4>
+                    <Badge
+                      variant={TASK_STATUS_TONE[task.status] || "default"}
+                      size="sm"
+                    >
+                      {formatEnumLabel(task.status)}
+                    </Badge>
+                  </div>
+
+                  <div className="mt-1 flex items-center gap-2.5 text-[11px] text-slate-400">
+                    <span>{formatEnumLabel(task.type)}</span>
+                    {task.assignee && (
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-4 h-4 rounded-md bg-slate-100 text-slate-500 flex items-center justify-center text-[9px] font-bold">
+                          {task.assignee.name?.[0]?.toUpperCase() || "?"}
                         </span>
-                      </div>
-                      <div className="flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
-                        <span className="capitalize">
-                          {task.type.toLowerCase()}
-                        </span>
-                        {task.assignee && (
-                          <div className="flex items-center gap-1">
-                            <div className="w-4 h-4 bg-zinc-300 dark:bg-zinc-700 rounded-full flex items-center justify-center text-[10px] text-zinc-800 dark:text-zinc-200">
-                              {task.assignee.name?.[0]?.toUpperCase() || "?"}
-                            </div>
-                            {task.assignee.name}
-                          </div>
+                        {task.assignee.name}
+                      </span>
+                    )}
+                    {(task.updatedAt || task.createdAt) && (
+                      <span className="ml-auto shrink-0">
+                        {format(
+                          new Date(task.updatedAt || task.createdAt),
+                          "MMM d, h:mm a"
                         )}
-                        <span>
-                          {task.updatedAt || task.createdAt
-                            ? format(
-                                new Date(task.updatedAt || task.createdAt),
-                                "MMM d, h:mm a"
-                              )
-                            : ""}
-                        </span>
-                      </div>
-                    </div>
+                      </span>
+                    )}
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </SectionCard>
   );
 };
 

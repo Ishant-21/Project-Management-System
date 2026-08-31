@@ -1,108 +1,123 @@
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
+import { Link } from "react-router-dom";
 import { ArrowRight, Clock, AlertTriangle, User } from "lucide-react";
 import { useSelector } from "react-redux";
 import { useUser } from "../lib/auth";
 import useVisibleProjects from "../hooks/useVisibleProjects";
+import { formatEnumLabel } from "../lib/format";
+import { PRIORITY_DOT } from "../lib/tone";
+import { Card } from "../ui";
 
 export default function TasksSummary() {
   const { currentWorkspace } = useSelector((state) => state.workspace);
   const { user } = useUser();
   const visibleProjects = useVisibleProjects();
-  const [tasks, setTasks] = useState([]);
 
-  // Get all tasks for all projects in current workspace
-  useEffect(() => {
-    if (currentWorkspace) {
-      setTasks((visibleProjects || []).flatMap((project) => project.tasks));
-    }
-  }, [currentWorkspace, user]);
+  // Derived rather than effect-written state, so the lists cannot go stale when
+  // projects change without currentWorkspace changing identity.
+  const tasks = useMemo(() => {
+    if (!currentWorkspace) return [];
+    return (visibleProjects || []).flatMap((project) => project.tasks || []);
+  }, [currentWorkspace, visibleProjects]);
 
-  const myTasks = user ? tasks.filter((i) => i.assigneeId === user.id) : [];
-  const overdueTasks = tasks.filter(
-    (t) =>
-      t.due_date && new Date(t.due_date) < new Date() && t.status !== "DONE"
-  );
-  const inProgressIssues = tasks.filter((i) => i.status === "IN_PROGRESS");
+  const { myTasks, overdueTasks, inProgressIssues } = useMemo(() => {
+    const now = new Date();
+    return {
+      // Match the assignee test used by StatsGrid and MyTasksSidebar.
+      myTasks: user
+        ? tasks.filter(
+            (t) => t.assigneeId === user.id || t.assignee?.id === user.id
+          )
+        : [],
+      overdueTasks: tasks.filter(
+        (t) => t.due_date && new Date(t.due_date) < now && t.status !== "DONE"
+      ),
+      inProgressIssues: tasks.filter((t) => t.status === "IN_PROGRESS"),
+    };
+  }, [tasks, user]);
 
   const summaryCards = [
     {
       title: "My Tasks",
       count: myTasks.length,
       icon: User,
-      color:
-        "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-400",
+      chip: "bg-violet-50 text-violet-500",
       items: myTasks.slice(0, 3),
     },
     {
       title: "Overdue",
       count: overdueTasks.length,
       icon: AlertTriangle,
-      color: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-400",
+      chip: "bg-rose-50 text-rose-500",
       items: overdueTasks.slice(0, 3),
     },
     {
       title: "In Progress",
       count: inProgressIssues.length,
       icon: Clock,
-      color: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-400",
+      chip: "bg-amber-50 text-amber-500",
       items: inProgressIssues.slice(0, 3),
     },
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {summaryCards.map((card) => (
-        <div
-          key={card.title}
-          className="bg-white dark:bg-zinc-950 dark:bg-gradient-to-br dark:from-zinc-800/70 dark:to-zinc-900/50 border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all duration-200 rounded-lg overflow-hidden"
-        >
-          <div className="border-b border-zinc-200 dark:border-zinc-800 p-4 pb-3">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-zinc-50 dark:bg-zinc-800 rounded-lg">
-                <card.icon className="w-4 h-4 text-gray-500 dark:text-zinc-400" />
-              </div>
-              <div className="flex items-center justify-between flex-1">
-                <h3 className="text-sm font-medium text-gray-800 dark:text-white">
-                  {card.title}
-                </h3>
-                <span
-                  className={`inline-block mt-1 px-2 py-1 rounded text-xs font-semibold ${card.color}`}
-                >
-                  {card.count}
-                </span>
-              </div>
-            </div>
+        <Card key={card.title} className="overflow-hidden">
+          <div className="flex items-center gap-2.5 px-4 py-3.5 border-b border-slate-100">
+            <span
+              className={`w-7 h-7 shrink-0 rounded-lg flex items-center justify-center ${card.chip}`}
+            >
+              <card.icon size={13} strokeWidth={2.2} />
+            </span>
+            <h3 className="text-[13px] font-bold text-slate-800">
+              {card.title}
+            </h3>
+            <span className="ml-auto text-[13px] font-bold text-slate-800 tabular-nums">
+              {card.count}
+            </span>
           </div>
-          <div className="p-4">
+
+          <div className="p-3">
             {card.items.length === 0 ? (
-              <p className="text-sm text-gray-500 dark:text-zinc-400 text-center py-4">
-                No {card.title.toLowerCase()}
+              <p className="py-4 text-center text-[12px] text-slate-400">
+                Nothing here
               </p>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-1.5">
                 {card.items.map((issue) => (
-                  <div
+                  <Link
                     key={issue.id}
-                    className="p-3 rounded-lg bg-zinc-50 dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                    to={`/taskDetails?projectId=${issue.projectId}&taskId=${issue.id}`}
+                    className="block px-3 py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors"
                   >
-                    <h4 className="text-sm font-medium text-gray-800 dark:text-white truncate">
+                    <h4 className="flex items-center gap-2 text-[12px] font-semibold text-slate-800 truncate">
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                          PRIORITY_DOT[issue.priority] || "bg-slate-400"
+                        }`}
+                      />
                       {issue.title}
                     </h4>
-                    <p className="text-xs text-gray-600 dark:text-zinc-400 capitalize mt-1">
-                      {issue.type} • {issue.priority} priority
+                    <p className="mt-0.5 pl-3.5 text-[11px] text-slate-400">
+                      {formatEnumLabel(issue.type)} - {formatEnumLabel(issue.priority)} priority
                     </p>
-                  </div>
+                  </Link>
                 ))}
+
                 {card.count > 3 && (
-                  <button className="flex items-center justify-center w-full text-sm text-gray-500 dark:text-zinc-400 hover:text-gray-800 dark:hover:text-white mt-2">
-                    View {card.count - 3} more{" "}
-                    <ArrowRight className="w-3 h-3 ml-2" />
-                  </button>
+                  <Link
+                    to="/projects"
+                    className="flex items-center justify-center gap-1.5 w-full pt-1.5 text-[12px] font-semibold text-slate-500 hover:text-sky-600 transition-colors"
+                  >
+                    View {card.count - 3} more
+                    <ArrowRight size={12} strokeWidth={2.4} />
+                  </Link>
                 )}
               </div>
             )}
           </div>
-        </div>
+        </Card>
       ))}
     </div>
   );

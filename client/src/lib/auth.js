@@ -1,3 +1,4 @@
-// Re-export the JSX implementation so .js files don't contain JSX.
-export * from './auth.jsx';
-export { default } from './auth.jsx';
+// Barrel so consumers can keep importing everything from "../lib/auth".
+// Hooks and components live in separate modules to keep fast-refresh happy.
+export * from "./authHooks";
+export * from "./auth.jsx";

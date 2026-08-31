@@ -1,4 +1,5 @@
 import prisma from "../configs/prisma.js";
+import { MESSAGES } from "../constants/messages.js";
 import crypto from "crypto";
 
 // Get all workspaces for user
@@ -46,7 +47,7 @@ export const createWorkspace = async (req, res) => {
     const { name, description } = req.body;
 
     if (!name) {
-      return res.status(400).json({ message: "Workspace name is required" });
+      return res.status(400).json({ message: MESSAGES.WORKSPACE_NAME_REQUIRED });
     }
 
     const id = crypto.randomUUID();
@@ -77,7 +78,7 @@ export const createWorkspace = async (req, res) => {
       include: { members: { include: { user: true } }, owner: true },
     });
 
-    res.json({ workspace: ws, message: "Workspace created" });
+    res.json({ workspace: ws, message: MESSAGES.WORKSPACE_CREATED });
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: error.code || error.message });
@@ -93,19 +94,19 @@ export const addMember = async (req, res) => {
     // Validate parameters BEFORE any DB lookup (a missing email would otherwise
     // make prisma.user.findUnique throw a 500).
     if (!email || !workspaceId || !role) {
-      return res.status(400).json({ message: "Missing required parameters" });
+      return res.status(400).json({ message: MESSAGES.WORKSPACE_MISSING_PARAMS });
     }
 
     // Check if role is valid
     if (!["ADMIN", "MEMBER"].includes(role)) {
-      return res.status(400).json({ message: "Invalid role" });
+      return res.status(400).json({ message: MESSAGES.WORKSPACE_INVALID_ROLE });
     }
 
     // Check if user exists
     const user = await prisma.user.findUnique({ where: { email } });
 
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({ message: MESSAGES.USER_NOT_FOUND });
     }
 
     // fetch workspace
@@ -115,7 +116,7 @@ export const addMember = async (req, res) => {
     });
 
     if (!workspace) {
-      return res.status(404).json({ message: "Workspace not found" });
+      return res.status(404).json({ message: MESSAGES.WORKSPACE_NOT_FOUND });
     }
 
     // Check creator has admin role
@@ -126,7 +127,7 @@ export const addMember = async (req, res) => {
     ) {
       return res
         .status(401)
-        .json({ message: "You do not have admin privileges" });
+        .json({ message: MESSAGES.WORKSPACE_ADMIN_REQUIRED });
     }
 
     // Check if user is already a member
@@ -135,7 +136,7 @@ export const addMember = async (req, res) => {
     );
 
     if (existingMember) {
-      return res.status(400).json({ message: "User is already a member" });
+      return res.status(400).json({ message: MESSAGES.WORKSPACE_MEMBER_EXISTS });
     }
 
     const member = await prisma.workspaceMember.create({
@@ -147,7 +148,7 @@ export const addMember = async (req, res) => {
       },
     });
 
-    return res.json({ member, message: "Member added successfully" });
+    return res.json({ member, message: MESSAGES.WORKSPACE_MEMBER_ADDED });
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: error.code || error.message });

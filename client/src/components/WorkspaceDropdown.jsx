@@ -1,15 +1,12 @@
 import { useState, useRef, useEffect } from "react";
-import { ChevronDown, Check, Plus } from "lucide-react";
+import { ChevronsUpDown, Check, Plus, Building2 } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { setCurrentWorkspace } from "../features/workspaceSlice";
 import { useNavigate } from "react-router-dom";
 import { useClerk, useOrganizationList } from "../lib/auth";
 
 function WorkspaceDropdown() {
-  const { setActive, userMemberships, isLoaded } = useOrganizationList({
-    userMemberships: true,
-  });
-
+  const { setActive, userMemberships, isLoaded } = useOrganizationList();
   const { openCreateOrganization } = useClerk();
 
   const { workspaces } = useSelector((state) => state.workspace);
@@ -29,94 +26,120 @@ function WorkspaceDropdown() {
     navigate("/");
   };
 
-  // Close dropdown on outside click
+  // Close dropdown on outside click / Escape
   useEffect(() => {
+    if (!isOpen) return;
+
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsOpen(false);
       }
     }
+    function handleKeyDown(event) {
+      if (event.key === "Escape") setIsOpen(false);
+    }
+
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     if (currentWorkspace && isLoaded) {
       setActive({ organization: currentWorkspace.id });
     }
-  }, [currentWorkspace, isLoaded]);
+  }, [currentWorkspace, isLoaded, setActive]);
+
+  const memberships = userMemberships?.data || [];
 
   return (
-    <div className="relative m-4" ref={dropdownRef}>
-      <button
-        onClick={() => setIsOpen((prev) => !prev)}
-        className="w-full flex items-center justify-between p-3 h-auto text-left rounded hover:bg-gray-100 dark:hover:bg-zinc-800"
-      >
-        <div className="flex items-center gap-3">
-          <img
-            src={currentWorkspace?.image_url || "/workspace.svg"}
-            alt={currentWorkspace?.name}
-            className="w-8 h-8 rounded shadow filter dark:invert"
-          />
-          <div className="min-w-0 flex-1">
-            <p className="font-semibold text-gray-800 dark:text-white text-sm truncate">
-              {currentWorkspace?.name || "Select Workspace"}
-            </p>
-            <p className="text-xs text-gray-500 dark:text-zinc-400 truncate">
-              {workspaces.length} workspace{workspaces.length !== 1 ? "s" : ""}
-            </p>
-          </div>
-        </div>
-        <ChevronDown className="w-4 h-4 text-gray-500 dark:text-zinc-400 flex-shrink-0" />
-      </button>
+    <div className="p-3 border-b border-white/5" ref={dropdownRef}>
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setIsOpen((prev) => !prev)}
+          aria-haspopup="listbox"
+          aria-expanded={isOpen}
+          className="w-full flex items-center gap-2.5 p-2.5 rounded-xl text-left bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all"
+        >
+          <span className="w-8 h-8 shrink-0 rounded-lg bg-sky-500/15 text-sky-400 flex items-center justify-center">
+            <Building2 size={15} strokeWidth={2.2} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[13px] font-bold text-white truncate">
+              {currentWorkspace?.name || "Select workspace"}
+            </span>
+            <span className="block text-[11px] text-slate-500 truncate">
+              {workspaces.length} workspace{workspaces.length === 1 ? "" : "s"}
+            </span>
+          </span>
+          <ChevronsUpDown size={14} className="shrink-0 text-slate-500" />
+        </button>
 
-      {isOpen && (
-        <div className="absolute z-50 w-64 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded shadow-lg top-full left-0">
-          <div className="p-2">
-            <p className="text-xs text-gray-500 dark:text-zinc-400 uppercase tracking-wider mb-2 px-2">
+        {isOpen && (
+          <div className="absolute z-50 left-0 right-0 top-full mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden">
+            <p className="label-micro text-slate-400 px-4 pt-3 pb-2">
               Workspaces
             </p>
-            {userMemberships.data.map(({ organization: ws }) => (
-              <div
-                key={ws.id}
-                onClick={() => onSelectWorkspace(ws.id)}
-                className="flex items-center gap-3 p-2 cursor-pointer rounded hover:bg-gray-100 dark:hover:bg-zinc-800"
-              >
-                <img
-                  src={ws.imageUrl || "/workspace.svg"}
-                  alt={ws.name}
-                  className="w-6 h-6 rounded filter dark:invert"
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800 dark:text-white truncate">
-                    {ws.name}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-zinc-400 truncate">
-                    {ws.membersCount || 0} members
-                  </p>
-                </div>
-                {currentWorkspace?.id === ws.id && (
-                  <Check className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
-                )}
-              </div>
-            ))}
-          </div>
 
-          <hr className="border-gray-200 dark:border-zinc-700" />
+            <div className="max-h-64 overflow-y-auto pb-1">
+              {memberships.length === 0 && (
+                <p className="px-4 py-2 text-[13px] text-slate-400">
+                  No workspaces yet
+                </p>
+              )}
+              {memberships.map(({ organization: ws }) => {
+                const selected = currentWorkspace?.id === ws.id;
+                return (
+                  <button
+                    type="button"
+                    key={ws.id}
+                    onClick={() => onSelectWorkspace(ws.id)}
+                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left hover:bg-slate-50 transition-colors"
+                  >
+                    <span
+                      className={`w-7 h-7 shrink-0 rounded-lg flex items-center justify-center ${
+                        selected
+                          ? "bg-sky-50 text-sky-500"
+                          : "bg-slate-100 text-slate-400"
+                      }`}
+                    >
+                      <Building2 size={13} strokeWidth={2.2} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[13px] font-semibold text-slate-800 truncate">
+                        {ws.name}
+                      </span>
+                      <span className="block text-[11px] text-slate-400">
+                        {ws.membersCount || 0} member
+                        {ws.membersCount === 1 ? "" : "s"}
+                      </span>
+                    </span>
+                    {selected && (
+                      <Check size={14} className="shrink-0 text-sky-500" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
 
-          <div
-            onClick={() => {
-              openCreateOrganization();
-              setIsOpen(false);
-            }}
-            className="p-2 cursor-pointer rounded group hover:bg-gray-100 dark:hover:bg-zinc-800"
-          >
-            <p className="flex items-center text-xs gap-2 my-1 w-full text-blue-600 dark:text-blue-400 group-hover:text-blue-500 dark:group-hover:text-blue-300">
-              <Plus className="w-4 h-4" /> Create Workspace
-            </p>
+            <button
+              type="button"
+              onClick={() => {
+                openCreateOrganization();
+                setIsOpen(false);
+              }}
+              className="w-full flex items-center gap-2 px-4 py-3 border-t border-slate-100 text-[12px] font-semibold text-sky-600 hover:bg-sky-50 transition-colors"
+            >
+              <Plus size={14} strokeWidth={2.4} />
+              Create workspace
+            </button>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

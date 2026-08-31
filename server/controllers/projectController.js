@@ -1,4 +1,5 @@
 import prisma from "../configs/prisma.js";
+import { MESSAGES } from "../constants/messages.js";
 
 // Create Project
 export const createProject = async (req, res) => {
@@ -13,7 +14,6 @@ export const createProject = async (req, res) => {
       end_date,
       team_members,
       team_lead,
-      progress,
       priority,
     } = req.body;
 
@@ -24,7 +24,7 @@ export const createProject = async (req, res) => {
     });
 
     if (!workspace) {
-      return res.status(404).json({ message: "Workspace not found" });
+      return res.status(404).json({ message: MESSAGES.WORKSPACE_NOT_FOUND });
     }
 
     if (
@@ -39,7 +39,7 @@ export const createProject = async (req, res) => {
     }
 
     if (!name) {
-      return res.status(400).json({ message: "Project name is required" });
+      return res.status(400).json({ message: MESSAGES.PROJECT_NAME_REQUIRED });
     }
 
     // Get Team Lead using email. team_lead is a required FK, so it must resolve
@@ -54,7 +54,7 @@ export const createProject = async (req, res) => {
     if (!teamLead) {
       return res
         .status(400)
-        .json({ message: "A valid team lead is required" });
+        .json({ message: MESSAGES.PROJECT_TEAM_LEAD_REQUIRED });
     }
 
     const project = await prisma.project.create({
@@ -64,7 +64,6 @@ export const createProject = async (req, res) => {
         description,
         status,
         priority,
-        progress,
         team_lead: teamLead.id,
         start_date: start_date ? new Date(start_date) : null,
         end_date: end_date ? new Date(end_date) : null,
@@ -101,7 +100,7 @@ export const createProject = async (req, res) => {
 
     res.json({
       project: projectWithMembers,
-      message: "Project created successfully",
+      message: MESSAGES.PROJECT_CREATED,
     });
   } catch (error) {
     console.log(error);
@@ -120,12 +119,11 @@ export const updateProject = async (req, res) => {
       status,
       start_date,
       end_date,
-      progress,
       priority,
     } = req.body;
 
     if (!id) {
-      return res.status(400).json({ message: "Project id is required" });
+      return res.status(400).json({ message: MESSAGES.PROJECT_ID_REQUIRED });
     }
 
     // Authorize against the project's REAL workspace, not a workspaceId from
@@ -138,7 +136,7 @@ export const updateProject = async (req, res) => {
     });
 
     if (!existing) {
-      return res.status(404).json({ message: "Project not found" });
+      return res.status(404).json({ message: MESSAGES.PROJECT_NOT_FOUND });
     }
 
     const isAdmin = existing.workspace.members.some(
@@ -148,7 +146,7 @@ export const updateProject = async (req, res) => {
 
     if (!isAdmin && !isLead) {
       return res.status(403).json({
-        message: "You don't have permission to update this project",
+        message: MESSAGES.PROJECT_EDIT_DENIED,
       });
     }
 
@@ -160,7 +158,6 @@ export const updateProject = async (req, res) => {
     if (description !== undefined) data.description = description;
     if (status !== undefined) data.status = status;
     if (priority !== undefined) data.priority = priority;
-    if (progress !== undefined) data.progress = progress;
     if (start_date !== undefined) {
       data.start_date = start_date ? new Date(start_date) : null;
     }
@@ -173,7 +170,7 @@ export const updateProject = async (req, res) => {
       data,
     });
 
-    res.json({ project, message: "Project updated successfully" });
+    res.json({ project, message: MESSAGES.PROJECT_UPDATED });
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: error.code || error.message });
@@ -194,13 +191,13 @@ export const addMember = async (req, res) => {
     });
 
     if (!project) {
-      return res.status(404).json({ message: "Project not found" });
+      return res.status(404).json({ message: MESSAGES.PROJECT_NOT_FOUND });
     }
 
     if (project.team_lead !== userId) {
       return res
         .status(403)
-        .json({ message: "Only project lead can add members" });
+        .json({ message: MESSAGES.PROJECT_MEMBER_ADD_DENIED });
     }
 
     // Check if user is already a member
@@ -209,7 +206,7 @@ export const addMember = async (req, res) => {
     );
 
     if (existingMember) {
-      return res.status(400).json({ message: "User is already a member" });
+      return res.status(400).json({ message: MESSAGES.WORKSPACE_MEMBER_EXISTS });
     }
 
     const user = await prisma.user.findUnique({
@@ -217,7 +214,7 @@ export const addMember = async (req, res) => {
     });
 
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({ message: MESSAGES.USER_NOT_FOUND });
     }
 
     const member = await prisma.projectMember.create({
@@ -227,7 +224,7 @@ export const addMember = async (req, res) => {
       },
     });
 
-    res.json({ member, message: "Member added successfully" });
+    res.json({ member, message: MESSAGES.WORKSPACE_MEMBER_ADDED });
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: error.code || error.message });

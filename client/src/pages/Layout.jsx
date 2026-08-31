@@ -1,24 +1,32 @@
 import { Outlet, useLocation } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { Loader2Icon } from "lucide-react";
 import Navbar from "../components/Navbar";
 import Sidebar from "../components/Sidebar";
-import { useDispatch, useSelector } from "react-redux";
-import { loadTheme } from "../features/themeSlice";
-import { Loader2Icon } from "lucide-react";
 import { useUser, useAuth } from "../lib/auth";
 import SignIn from "./SignIn";
-import CreateOrganization from "../components/CreateOrganization";
 import { fetchWorkspaces } from "../features/workspaceSlice";
+
+const Loader = () => (
+  <div className="flex items-center justify-center h-screen bg-slate-50">
+    <Loader2Icon className="size-6 text-sky-500 animate-spin" />
+  </div>
+);
 
 const Layout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const { loading, workspaces } = useSelector((state) => state.workspace);
+  const { loading } = useSelector((state) => state.workspace);
   const dispatch = useDispatch();
 
   const { user, isLoaded } = useUser();
   const { getToken } = useAuth();
   const { pathname, search } = useLocation();
   const mainContentRef = useRef(null);
+  // Shared with Sidebar so its outside-click handler can ignore presses on the
+  // Navbar toggle - otherwise mousedown closed the panel and the button click
+  // immediately reopened it, making the toggle unable to ever close.
+  const sidebarTriggerRef = useRef(null);
 
   // Scroll to top on route change
   useEffect(() => {
@@ -27,63 +35,58 @@ const Layout = () => {
     }
   }, [pathname, search]);
 
-  // Initial load of theme
+  // Load workspaces once per signed-in user. Keying on the user id rather than
+  // `workspaces.length === 0` means a second account in the same tab does not
+  // inherit the previous account cached workspaces.
+  const userId = user?.id;
   useEffect(() => {
-    dispatch(loadTheme());
-  }, []);
-
-  // Initial load of workspaces
-  useEffect(() => {
-    if (isLoaded && user && workspaces.length === 0) {
+    if (isLoaded && userId) {
       dispatch(fetchWorkspaces({ getToken }));
     }
-  }, [user, isLoaded]);
+  }, [userId, isLoaded, dispatch, getToken]);
 
-  // Auth state still resolving (/auth/me in flight) — show a loader instead of
+  // Auth state still resolving (/auth/me in flight) - show a loader instead of
   // briefly flashing the Sign-In form to already-authenticated users on reload.
-  if (!isLoaded) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-white dark:bg-zinc-950">
-        <Loader2Icon className="size-7 text-blue-500 animate-spin" />
-      </div>
-    );
-  }
+  if (!isLoaded) return <Loader />;
 
-  if (!user) {
-    return (
-      <div className="flex justify-center items-center h-screen bg-white dark:bg-zinc-950">
-        <SignIn />
-      </div>
-    );
-  }
+  // SignIn already renders its own full-height centered layout.
+  if (!user) return <SignIn />;
 
-  if (loading)
-    return (
-      <div className="flex items-center justify-center h-screen bg-white dark:bg-zinc-950">
-        <Loader2Icon className="size-7 text-blue-500 animate-spin" />
-      </div>
-    );
+  if (loading) return <Loader />;
 
-  // Allow authenticated users to access the app even if they have no workspaces yet.
-  // Creating a workspace should be optional and done from the Workspace dropdown.
-
+  // Allow authenticated users into the app even with no workspaces yet.
   return (
-    <div className="flex bg-white dark:bg-zinc-950 text-gray-900 dark:text-slate-100">
-      <Sidebar
+    <div className="flex flex-col h-screen overflow-hidden bg-slate-50">
+      <Navbar
         isSidebarOpen={isSidebarOpen}
         setIsSidebarOpen={setIsSidebarOpen}
+        triggerRef={sidebarTriggerRef}
       />
-      <div className="flex-1 flex flex-col h-screen">
-        <Navbar
+
+      <div className="flex flex-1 overflow-hidden">
+        <Sidebar
           isSidebarOpen={isSidebarOpen}
           setIsSidebarOpen={setIsSidebarOpen}
+          triggerRef={sidebarTriggerRef}
         />
-        <div 
+
+        {/* Scrim behind the sidebar drawer on mobile */}
+        {isSidebarOpen && (
+          <div
+            className="sm:hidden fixed inset-0 top-14 z-20 bg-slate-900/40 backdrop-blur-sm"
+            onClick={() => setIsSidebarOpen(false)}
+            aria-hidden="true"
+          />
+        )}
+
+        <main
           ref={mainContentRef}
-          className="flex-1 h-full p-6 xl:p-10 xl:px-16 overflow-y-scroll"
+          className="flex-1 min-w-0 overflow-y-auto bg-slate-50 px-5 py-6 sm:px-7 lg:px-9 lg:py-8"
         >
-          <Outlet />
-        </div>
+          <div className="max-w-[1240px] mx-auto">
+            <Outlet />
+          </div>
+        </main>
       </div>
     </div>
   );

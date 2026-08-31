@@ -7,6 +7,7 @@ import projectRouter from "./routes/projectRoutes.js";
 import taskRouter from "./routes/taskRoutes.js";
 import commentRouter from "./routes/commentRoutes.js";
 import authRouter from "./routes/authRoutes.js";
+import messageRouter from "./routes/messageRoutes.js";
 import { initializeDatabase } from "./configs/prisma.js";
 
 const app = express();
@@ -36,6 +37,10 @@ app.get("/", (req, res) => res.send("Server is live!⌛"));
 
 // Authentication routes
 app.use("/auth", authRouter);
+
+// User-facing message catalog. Deliberately NOT behind `protect`: it is UI
+// copy the client needs to render tooltips before anyone signs in.
+app.use("/api/messages", messageRouter);
 
 // Routes
 app.use("/api/workspaces", protect, workspaceRouter);

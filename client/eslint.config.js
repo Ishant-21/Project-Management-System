@@ -23,7 +23,17 @@ export default defineConfig([
       },
     },
     rules: {
-      "no-unused-vars": ["error", { varsIgnorePattern: "^[A-Z_]" }],
+      // This config has no eslint-plugin-react, so components referenced only
+      // from JSX (`const { icon: Icon } = card` -> `<Icon />`) look unused.
+      // Ignoring PascalCase/underscore names covers that without adding a dep.
+      "no-unused-vars": [
+        "error",
+        {
+          varsIgnorePattern: "^[A-Z_]",
+          argsIgnorePattern: "^[A-Z_]",
+          destructuredArrayIgnorePattern: "^_",
+        },
+      ],
     },
   },
 ]);

@@ -1,20 +1,24 @@
 import { useState } from "react";
-import { Mail, UserPlus } from "lucide-react";
+import { Mail, UserPlus, XIcon } from "lucide-react";
 import { useSelector } from "react-redux";
 import { useOrganization } from "../lib/auth";
 import { useUser } from "../lib/auth";
 import toast from "react-hot-toast";
+import Modal from "./Modal";
+import { canInviteToWorkspace } from "../lib/permissions";
+import useMessages from "../hooks/useMessages";
+import { Button, Tooltip, inputClass, labelClass } from "../ui";
 
 const InviteMemberDialog = ({ isDialogOpen, setIsDialogOpen }) => {
+  const { msg } = useMessages();
   const { organization } = useOrganization();
 
   const currentWorkspace = useSelector(
     (state) => state.workspace?.currentWorkspace || null
   );
   const { user } = useUser();
-  const isAdmin = currentWorkspace?.members?.some(
-    (m) => ((m.userId === user?.id) || (m.user && m.user.id === user?.id)) && m.role === "ADMIN"
-  );
+  // Mirrors the server rule in one place — see lib/permissions.js
+  const isAdmin = canInviteToWorkspace(currentWorkspace, user?.id);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
@@ -25,116 +29,139 @@ const InviteMemberDialog = ({ isDialogOpen, setIsDialogOpen }) => {
     e.preventDefault();
 
     if (!organization) {
-      toast.error("No active workspace selected");
+      toast.error(msg("WORKSPACE_NOT_SELECTED"));
+      return;
+    }
+    if (!isAdmin) {
+      toast.error(msg("WORKSPACE_ADMIN_REQUIRED"));
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      await organization.inviteMember({
+      const result = await organization.inviteMember({
         emailAddress: formData.email,
         role: formData.role,
       });
 
-      toast.success("Added successfully");
+      toast.success(result?.message);
+      // Reset so reopening the dialog starts fresh instead of showing the
+      // previously invited address.
+      setFormData({ email: "", role: "org:member" });
       setIsDialogOpen(false);
     } catch (error) {
-      console.log(error);
       toast.error(error.response?.data?.message || error.message);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (!isDialogOpen) return null;
-
   return (
-    <div className="fixed inset-0 bg-black/20 dark:bg-black/50 backdrop-blur flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-xl p-6 w-full max-w-md text-zinc-900 dark:text-zinc-200">
-        {/* Header */}
-        <div className="mb-4">
-          <h2 className="text-xl font-bold flex items-center gap-2">
-            <UserPlus className="size-5 text-zinc-900 dark:text-zinc-200" />{" "}
-            Add Team Member
-          </h2>
-          {currentWorkspace && (
-            <p className="text-sm text-zinc-700 dark:text-zinc-400">
-              Adding to workspace:{" "}
-              <span className="text-blue-600 dark:text-blue-400">
-                {currentWorkspace.name}
-              </span>
-            </p>
-          )}
+    <Modal
+      isOpen={isDialogOpen}
+      onClose={() => setIsDialogOpen(false)}
+      labelledBy="invite-member-title"
+      panelClassName="max-w-md"
+    >
+      <div className="relative bg-white border border-slate-200 rounded-2xl shadow-xl p-6">
+        <button
+          type="button"
+          aria-label="Close dialog"
+          className="absolute top-4 right-4 w-7 h-7 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition-colors"
+          onClick={() => setIsDialogOpen(false)}
+        >
+          <XIcon size={15} strokeWidth={2.2} />
+        </button>
+
+        <div className="flex items-start gap-3 mb-5 pr-8">
+          <span className="w-9 h-9 shrink-0 rounded-xl bg-violet-50 text-violet-500 flex items-center justify-center">
+            <UserPlus size={17} strokeWidth={2.2} />
+          </span>
+          <div className="min-w-0">
+            <h2
+              id="invite-member-title"
+              className="text-[16px] font-bold text-slate-900"
+            >
+              Add Team Member
+            </h2>
+            {currentWorkspace && (
+              <p className="text-[12px] text-slate-500 truncate">
+                to{" "}
+                <span className="font-semibold text-sky-600">
+                  {currentWorkspace.name}
+                </span>
+              </p>
+            )}
+          </div>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Email */}
-          <div className="space-y-2">
-            <label
-              htmlFor="email"
-              className="text-sm font-medium text-zinc-900 dark:text-zinc-200"
-            >
-              Email Address
-            </label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 dark:text-zinc-400 w-4 h-4" />
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) =>
-                  setFormData({ ...formData, email: e.target.value })
-                }
-                placeholder="Enter email address"
-                className="pl-10 mt-1 w-full rounded border border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-200 text-sm placeholder-zinc-400 dark:placeholder-zinc-500 py-2 focus:outline-none focus:border-blue-500"
-                required
-              />
+        {!isAdmin && (
+          <div className="mb-5 px-3.5 py-3 rounded-xl bg-slate-50 border border-slate-100 text-[12px] text-slate-600">
+            {msg("WORKSPACE_ADMIN_REQUIRED")}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit}>
+          <fieldset disabled={!isAdmin} className="space-y-4 min-w-0">
+            <div>
+              <label htmlFor="email" className={labelClass}>
+                Email Address
+              </label>
+              <div className="relative">
+                <Mail
+                  size={14}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                />
+                <input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) =>
+                    setFormData({ ...formData, email: e.target.value })
+                  }
+                  placeholder="teammate@company.com"
+                  className={`${inputClass} pl-9`}
+                  required
+                />
+              </div>
             </div>
-          </div>
 
-          {/* Role */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-zinc-900 dark:text-zinc-200">
-              Role
-            </label>
-            <select
-              value={formData.role}
-              onChange={(e) =>
-                setFormData({ ...formData, role: e.target.value })
-              }
-              className="w-full rounded border border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-200 py-2 px-3 mt-1 focus:outline-none focus:border-blue-500 text-sm"
-            >
-              <option value="org:member">Member</option>
-              <option value="org:admin">Admin</option>
-            </select>
-          </div>
+            <div>
+              <label htmlFor="invite-role" className={labelClass}>
+                Role
+              </label>
+              <select
+                id="invite-role"
+                value={formData.role}
+                onChange={(e) =>
+                  setFormData({ ...formData, role: e.target.value })
+                }
+                className={inputClass}
+              >
+                <option value="org:member">Member</option>
+                <option value="org:admin">Admin</option>
+              </select>
+            </div>
+          </fieldset>
 
-          {/* Footer */}
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={() => setIsDialogOpen(false)}
-              className="px-5 py-2 rounded text-sm border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
-            >
+          {/* Cancel stays outside the fieldset so it is always usable */}
+          <div className="flex justify-end gap-2 pt-5">
+            <Button variant="secondary" onClick={() => setIsDialogOpen(false)}>
               Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting || !currentWorkspace || !isAdmin}
-              title={!isAdmin ? "Only workspace admins can invite members" : undefined}
-              className={`px-5 py-2 rounded text-sm disabled:opacity-50 transition ${
-                isAdmin
-                  ? "bg-gradient-to-br from-blue-500 to-blue-600 text-white hover:opacity-90"
-                  : "bg-zinc-200 text-zinc-500 cursor-not-allowed"
-              }`}
-            >
-              {isSubmitting ? "Adding..." : "Add"}
-            </button>
+            </Button>
+            <Tooltip title={isAdmin ? undefined : msg("WORKSPACE_ADMIN_REQUIRED")}>
+              <Button
+                type="submit"
+                disabled={isSubmitting || !currentWorkspace || !isAdmin}
+              >
+                {isSubmitting ? "Adding..." : "Add Member"}
+              </Button>
+            </Tooltip>
           </div>
         </form>
       </div>
-    </div>
+    </Modal>
   );
 };
 

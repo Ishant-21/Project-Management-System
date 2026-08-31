@@ -9,38 +9,21 @@ import {
   CalendarIcon,
   ArrowRightIcon,
 } from "lucide-react";
-import { useSelector } from "react-redux";
+import { PRIORITY_DOT } from "../lib/tone";
+
+const SUB_ITEMS = [
+  { title: "Tasks", tab: "tasks", icon: KanbanIcon },
+  { title: "Calendar", tab: "calendar", icon: CalendarIcon },
+  { title: "Analytics", tab: "analytics", icon: ChartColumnIcon },
+  { title: "Settings", tab: "settings", icon: SettingsIcon },
+];
 
 const ProjectSidebar = ({ setIsSidebarOpen }) => {
   const location = useLocation();
-
-  const [expandedProjects, setExpandedProjects] = useState(new Set());
   const [searchParams] = useSearchParams();
+  const [expandedProjects, setExpandedProjects] = useState(new Set());
 
   const projects = useVisibleProjects();
-
-  const getProjectSubItems = (projectId) => [
-    {
-      title: "Tasks",
-      icon: KanbanIcon,
-      url: `/projectsDetail?id=${projectId}&tab=tasks`,
-    },
-    {
-      title: "Analytics",
-      icon: ChartColumnIcon,
-      url: `/projectsDetail?id=${projectId}&tab=analytics`,
-    },
-    {
-      title: "Calendar",
-      icon: CalendarIcon,
-      url: `/projectsDetail?id=${projectId}&tab=calendar`,
-    },
-    {
-      title: "Settings",
-      icon: SettingsIcon,
-      url: `/projectsDetail?id=${projectId}&tab=settings`,
-    },
-  ];
 
   const toggleProject = (id) => {
     const newSet = new Set(expandedProjects);
@@ -51,64 +34,83 @@ const ProjectSidebar = ({ setIsSidebarOpen }) => {
   return (
     <div className="mt-6 px-3">
       <div className="flex items-center justify-between px-3 py-2">
-        <h3 className="text-xs font-medium text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
-          Projects
-        </h3>
-        <Link 
+        <span className="label-micro text-slate-500">Projects</span>
+        {/* A nested button inside a link is invalid HTML, so the link itself
+            carries the icon-button styling. */}
+        <Link
           to="/projects"
+          aria-label="View all projects"
           onClick={() => setIsSidebarOpen && setIsSidebarOpen(false)}
+          className="w-5 h-5 rounded-md flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/10 transition-colors"
         >
-          <button className="size-5 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-zinc-800 rounded flex items-center justify-center transition-colors duration-200">
-            <ArrowRightIcon className="size-3" />
-          </button>
+          <ArrowRightIcon size={12} strokeWidth={2.4} />
         </Link>
       </div>
 
-      <div className="space-y-1 px-3">
-        {projects.map((project) => (
-          <div key={project.id}>
-            <button
-              onClick={() => toggleProject(project.id)}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-colors duration-200 text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-800 hover:text-gray-900 dark:hover:text-white"
-            >
-              <ChevronRightIcon
-                className={`size-3 text-gray-500 dark:text-zinc-400 transition-transform duration-200 ${
-                  expandedProjects.has(project.id) && "rotate-90"
-                }`}
-              />
-              <div className="size-2 rounded-full bg-blue-500" />
-              <span className="truncate max-w-40 text-sm">{project.name}</span>
-            </button>
+      <div className="space-y-0.5">
+        {projects.length === 0 && (
+          <p className="px-3 py-2 text-[12px] text-slate-500">No projects yet</p>
+        )}
 
-            {expandedProjects.has(project.id) && (
-              <div className="ml-5 mt-1 space-y-1">
-                {getProjectSubItems(project.id).map((subItem) => {
-                  // checking if the current path matches the sub-item's URL
-                  const isActive =
-                    location.pathname === `/projectsDetail` &&
-                    searchParams.get("id") === project.id &&
-                    searchParams.get("tab") === subItem.title.toLowerCase();
+        {projects.map((project) => {
+          const expanded = expandedProjects.has(project.id);
 
-                  return (
-                    <Link
-                      key={subItem.title}
-                      to={subItem.url}
-                      onClick={() => setIsSidebarOpen && setIsSidebarOpen(false)}
-                      className={`flex items-center gap-3 px-3 py-1.5 rounded-lg transition-colors duration-200 text-xs ${
-                        isActive
-                          ? "bg-blue-100 text-blue-600 hover:bg-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20"
-                          : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-zinc-800"
-                      }`}
-                    >
-                      <subItem.icon className="size-3" />
-                      {subItem.title}
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        ))}
+          return (
+            <div key={project.id}>
+              <button
+                type="button"
+                onClick={() => toggleProject(project.id)}
+                aria-expanded={expanded}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all"
+              >
+                <ChevronRightIcon
+                  size={12}
+                  strokeWidth={2.4}
+                  className={`shrink-0 text-slate-500 transition-transform duration-200 ${
+                    expanded ? "rotate-90" : ""
+                  }`}
+                />
+                <span
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                    PRIORITY_DOT[project.priority] || "bg-sky-500"
+                  }`}
+                />
+                <span className="truncate text-[12px] font-medium">
+                  {project.name}
+                </span>
+              </button>
+
+              {expanded && (
+                <div className="ml-6 mt-0.5 mb-1 space-y-0.5 border-l border-white/10 pl-2">
+                  {SUB_ITEMS.map((subItem) => {
+                    const isActive =
+                      location.pathname === "/projectsDetail" &&
+                      searchParams.get("id") === project.id &&
+                      searchParams.get("tab") === subItem.tab;
+
+                    return (
+                      <Link
+                        key={subItem.tab}
+                        to={`/projectsDetail?id=${project.id}&tab=${subItem.tab}`}
+                        onClick={() =>
+                          setIsSidebarOpen && setIsSidebarOpen(false)
+                        }
+                        className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-[12px] transition-all ${
+                          isActive
+                            ? "bg-sky-500/10 text-sky-400 font-semibold"
+                            : "text-slate-500 hover:text-slate-200 hover:bg-white/5"
+                        }`}
+                      >
+                        <subItem.icon size={12} strokeWidth={2} />
+                        {subItem.title}
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

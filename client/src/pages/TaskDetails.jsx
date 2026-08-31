@@ -1,14 +1,39 @@
 import { format } from "date-fns";
 import toast from "react-hot-toast";
 import { useSelector } from "react-redux";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { CalendarIcon, MessageCircle, PenIcon } from "lucide-react";
+import {
+  CalendarIcon,
+  MessageCircle,
+  FolderOpen,
+  Send,
+  FileX,
+  Info,
+} from "lucide-react";
 import { useAuth, useUser } from "../lib/auth";
 import useVisibleProjects from "../hooks/useVisibleProjects";
+import { formatEnumLabel } from "../lib/format";
+import { canComment } from "../lib/permissions";
+import {
+  TASK_STATUS_TONE,
+  TASK_TYPE_TONE,
+  PRIORITY_TONE,
+  PROJECT_STATUS_TONE,
+} from "../lib/tone";
 import api from "../configs/api";
+import useMessages from "../hooks/useMessages";
+import {
+  Badge,
+  Card,
+  EmptyState,
+  SectionCard,
+  Tooltip,
+  inputClass,
+} from "../ui";
 
 const TaskDetails = () => {
+  const { msg } = useMessages();
   const [searchParams] = useSearchParams();
   const projectId = searchParams.get("projectId");
   const taskId = searchParams.get("taskId");
@@ -19,12 +44,16 @@ const TaskDetails = () => {
   const [project, setProject] = useState(null);
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState("");
+  const [isPostingComment, setIsPostingComment] = useState(false);
   const [loading, setLoading] = useState(true);
+  // addComment is restricted to project members server-side; without this the
+  // composer accepted input from anyone and failed with a 403 on Post.
+  const mayComment = canComment(project, user?.id);
 
   const { currentWorkspace } = useSelector((state) => state.workspace);
   const visibleProjects = useVisibleProjects();
 
-  const fetchComments = async () => {
+  const fetchComments = useCallback(async () => {
     if (!taskId) return;
 
     try {
@@ -37,9 +66,9 @@ const TaskDetails = () => {
     } catch (error) {
       toast.error(error?.response?.data?.message || error.message);
     }
-  };
+  }, [taskId, getToken]);
 
-  const fetchTaskDetails = () => {
+  const fetchTaskDetails = useCallback(() => {
     if (!projectId || !taskId) {
       setTask(null);
       setProject(null);
@@ -47,8 +76,8 @@ const TaskDetails = () => {
       return;
     }
 
-    // Workspace/projects not loaded yet — stay in loading state so the
-    // effect re-runs (and resolves) once the data arrives.
+    // Workspace/projects not loaded yet — stay in loading state so the effect
+    // re-runs (and resolves) once the data arrives.
     if (!currentWorkspace) return;
 
     const proj = (visibleProjects || []).find((p) => p.id === projectId);
@@ -57,10 +86,16 @@ const TaskDetails = () => {
     setProject(proj || null);
     setTask(tsk || null);
     setLoading(false);
-  };
+  }, [projectId, taskId, currentWorkspace, visibleProjects]);
 
   const handleAddComment = async () => {
-    if (!newComment.trim()) return;
+    if (!newComment.trim() || isPostingComment) return;
+    if (!mayComment) {
+      toast.error(msg("COMMENT_DENIED"));
+      return;
+    }
+
+    setIsPostingComment(true);
 
     try {
       toast.loading("Adding comment...");
@@ -69,179 +104,231 @@ const TaskDetails = () => {
       const { data } = await api.post(
         "/api/comments",
         { taskId: task.id, content: newComment },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
 
       setComments((prev) => [...prev, data.comment]);
       setNewComment("");
       toast.dismissAll();
-      toast.success("Comment added.");
+      toast.success(data.message);
     } catch (error) {
       toast.dismissAll();
       toast.error(error?.response?.data?.message || error.message);
-      console.error(error);
+    } finally {
+      setIsPostingComment(false);
     }
   };
 
   useEffect(() => {
     fetchTaskDetails();
-  }, [taskId, projectId, currentWorkspace]);
+  }, [fetchTaskDetails]);
 
+  // Poll for new comments while a task is open. Keyed on taskId rather than the
+  // task object so a task re-render does not tear down and rebuild the interval.
+  const hasTask = Boolean(task);
   useEffect(() => {
-    if (taskId && task) {
-      fetchComments();
-      const interval = setInterval(() => {
-        fetchComments();
-      }, 10000);
-      return () => clearInterval(interval);
-    }
-  }, [taskId, task]);
+    if (!taskId || !hasTask) return;
 
-  if (loading)
+    fetchComments();
+    const interval = setInterval(fetchComments, 10000);
+    return () => clearInterval(interval);
+  }, [taskId, hasTask, fetchComments]);
+
+  if (loading) {
     return (
-      <div className="text-gray-500 dark:text-zinc-400 px-4 py-6">
+      <div className="py-24 text-center text-[13px] text-slate-400">
         Loading task details...
       </div>
     );
-  if (!task)
-    return <div className="text-red-500 px-4 py-6">Task not found.</div>;
+  }
+
+  if (!task) {
+    return (
+      <Card>
+        <EmptyState
+          icon={FileX}
+          title={msg("TASK_NOT_FOUND")}
+          hint="It may have been deleted, or you may not have access to it."
+        />
+      </Card>
+    );
+  }
 
   return (
-    <div className="flex flex-col-reverse lg:flex-row gap-6 sm:p-4 text-gray-900 dark:text-zinc-100 max-w-6xl mx-auto">
-      {/* Left: Comments / Chatbox */}
-      <div className="w-full lg:w-2/3">
-        <div className="p-5 rounded-md  border border-gray-300 dark:border-zinc-800  flex flex-col lg:h-[80vh]">
-          <h2 className="text-base font-semibold flex items-center gap-2 mb-4 text-gray-900 dark:text-white">
-            <MessageCircle className="size-5" /> Task Discussion (
-            {comments.length})
-          </h2>
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+      {/* Discussion */}
+      <div className="lg:col-span-2 min-w-0 order-2 lg:order-1">
+        <Card className="flex flex-col lg:h-[78vh] overflow-hidden">
+          <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-100">
+            <MessageCircle size={15} className="text-slate-400" strokeWidth={2} />
+            <h2 className="text-[14px] font-bold text-slate-800">
+              Task Discussion
+            </h2>
+            <Badge variant="default" size="sm" className="ml-1">
+              {comments.length}
+            </Badge>
+          </div>
 
-          <div className="flex-1 md:overflow-y-scroll no-scrollbar">
-            {comments.length > 0 ? (
-              <div className="flex flex-col gap-4 mb-6 mr-2">
-                {comments.map((comment) => (
-                  <div
-                    key={comment.id}
-                    className={`sm:max-w-4/5 dark:bg-gradient-to-br dark:from-zinc-800 dark:to-zinc-900 border border-gray-300 dark:border-zinc-700 p-3 rounded-md ${
-                      comment.user.id === user?.id ? "ml-auto" : "mr-auto"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 mb-1 text-sm text-gray-500 dark:text-zinc-400">
-                      <img
-                        src={comment.user.image || "/profile.svg"}
-                        alt="avatar"
-                        className="size-5 rounded-full"
-                      />
-                      <span className="font-medium text-gray-900 dark:text-white">
-                        {comment.user.name}
-                      </span>
-                      <span className="text-xs text-gray-400 dark:text-zinc-600">
-                        •{" "}
-                        {format(
-                          new Date(comment.createdAt),
-                          "dd MMM yyyy, HH:mm"
-                        )}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-900 dark:text-zinc-200">
-                      {comment.content}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-600 dark:text-zinc-500 mb-4 text-sm">
-                No comments yet. Be the first!
+          <div className="flex-1 overflow-y-auto p-5">
+            {comments.length === 0 ? (
+              <p className="py-8 text-center text-[13px] text-slate-400">
+                No comments yet. Be the first.
               </p>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {comments.map((comment) => {
+                  const mine = comment.user?.id === user?.id;
+                  return (
+                    <div
+                      key={comment.id}
+                      className={`max-w-[85%] sm:max-w-[75%] px-3.5 py-2.5 rounded-2xl border ${
+                        mine
+                          ? "ml-auto bg-sky-50 border-sky-100"
+                          : "mr-auto bg-slate-50 border-slate-100"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="w-5 h-5 shrink-0 rounded-md bg-white border border-slate-200 text-slate-500 flex items-center justify-center text-[9px] font-bold">
+                          {comment.user?.name?.[0]?.toUpperCase() || "?"}
+                        </span>
+                        <span className="text-[12px] font-bold text-slate-700">
+                          {comment.user?.name || "Unknown user"}
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                          {format(new Date(comment.createdAt), "dd MMM, HH:mm")}
+                        </span>
+                      </div>
+                      <p className="text-[13px] text-slate-700 whitespace-pre-wrap break-words">
+                        {comment.content}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
 
-          {/* Add Comment */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-end gap-3">
-            <textarea
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              placeholder="Write a comment..."
-              className="w-full dark:bg-zinc-800 border border-gray-300 dark:border-zinc-700 rounded-md p-2 text-sm text-gray-900 dark:text-zinc-200 resize-none focus:outline-none focus:ring-1 focus:ring-blue-600"
-              rows={3}
-            />
-            <button
-              onClick={handleAddComment}
-              className="bg-gradient-to-l from-blue-500 to-blue-600 transition-colors text-white text-sm px-5 py-2 rounded "
-            >
-              Post
-            </button>
+          {/* Composer */}
+          <div className="border-t border-slate-100 p-4">
+            <div className="flex items-end gap-2">
+              <label htmlFor="new-comment" className="sr-only">
+                Write a comment
+              </label>
+              <Tooltip
+                title={mayComment ? undefined : msg("COMMENT_DENIED")}
+                className="w-full"
+              >
+                <textarea
+                  id="new-comment"
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  placeholder={
+                    mayComment ? "Write a comment..." : msg("COMMENT_DENIED")
+                  }
+                  disabled={!mayComment}
+                  className={`${inputClass} resize-none`}
+                  rows={2}
+                />
+              </Tooltip>
+              <Tooltip
+                title={mayComment ? "Post comment" : msg("COMMENT_DENIED")}
+                className="shrink-0"
+              >
+                <button
+                  type="button"
+                  onClick={handleAddComment}
+                  disabled={
+                    !mayComment || !newComment.trim() || isPostingComment
+                  }
+                  aria-label="Post comment"
+                  className="w-10 h-10 rounded-xl bg-sky-500 text-white shadow-sm shadow-sky-500/20 hover:bg-sky-600 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none flex items-center justify-center transition-all"
+                >
+                  <Send size={15} strokeWidth={2.2} />
+                </button>
+              </Tooltip>
+            </div>
           </div>
-        </div>
+        </Card>
       </div>
 
-      {/* Right: Task + Project Info */}
-      <div className="w-full lg:w-1/2 flex flex-col gap-6">
-        {/* Task Info */}
-        <div className="p-5 rounded-md bg-white dark:bg-zinc-900 border border-gray-300 dark:border-zinc-800 ">
-          <div className="mb-3">
-            <h1 className="text-lg font-medium text-gray-900 dark:text-zinc-100">
-              {task.title}
-            </h1>
-            <div className="flex flex-wrap gap-2 mt-2">
-              <span className="px-2 py-0.5 rounded bg-zinc-200 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-300 text-xs">
-                {task.status}
-              </span>
-              <span className="px-2 py-0.5 rounded bg-blue-200 dark:bg-blue-900 text-blue-900 dark:text-blue-300 text-xs">
-                {task.type}
-              </span>
-              <span className="px-2 py-0.5 rounded bg-green-200 dark:bg-emerald-900 text-green-900 dark:text-emerald-300 text-xs">
-                {task.priority}
-              </span>
-            </div>
+      {/* Task + project info */}
+      <div className="min-w-0 space-y-5 order-1 lg:order-2">
+        <SectionCard title="Task" icon={Info} bodyClassName="p-5">
+          <h1 className="text-[16px] font-bold text-slate-900 leading-snug">
+            {task.title}
+          </h1>
+
+          <div className="flex flex-wrap gap-1.5 mt-3">
+            <Badge variant={TASK_STATUS_TONE[task.status] || "default"} size="sm">
+              {formatEnumLabel(task.status)}
+            </Badge>
+            <Badge variant={TASK_TYPE_TONE[task.type] || "default"} size="sm">
+              {formatEnumLabel(task.type)}
+            </Badge>
+            <Badge variant={PRIORITY_TONE[task.priority] || "default"} size="sm">
+              {formatEnumLabel(task.priority)}
+            </Badge>
           </div>
 
           {task.description && (
-            <p className="text-sm text-gray-600 dark:text-zinc-400 leading-relaxed mb-4">
+            <p className="mt-4 text-[13px] text-slate-600 leading-relaxed">
               {task.description}
             </p>
           )}
 
-          <hr className="border-zinc-200 dark:border-zinc-700 my-3" />
+          <hr className="my-4 border-slate-100" />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-gray-700 dark:text-zinc-300">
-            <div className="flex items-center gap-2">
-              <img
-                src={task.assignee?.image || "/profile.svg"}
-                className="size-5 rounded-full"
-                alt="avatar"
-              />
-              {task.assignee?.name || "Unassigned"}
+          <dl className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <dt className="label-micro text-slate-400">Assignee</dt>
+              <dd className="flex items-center gap-2 text-[13px] font-medium text-slate-700 min-w-0">
+                <span className="w-6 h-6 shrink-0 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center text-[10px] font-bold">
+                  {task.assignee?.name?.[0]?.toUpperCase() || "?"}
+                </span>
+                <span className="truncate">
+                  {task.assignee?.name || "Unassigned"}
+                </span>
+              </dd>
             </div>
-            <div className="flex items-center gap-2">
-              <CalendarIcon className="size-4 text-gray-500 dark:text-zinc-500" />
-              Due : {task.due_date ? format(new Date(task.due_date), "dd MMM yyyy") : "—"}
+            <div className="flex items-center justify-between gap-3">
+              <dt className="label-micro text-slate-400">Due</dt>
+              <dd className="flex items-center gap-1.5 text-[13px] font-medium text-slate-700">
+                <CalendarIcon size={13} className="text-slate-400" strokeWidth={2} />
+                {task.due_date
+                  ? format(new Date(task.due_date), "dd MMM yyyy")
+                  : "None"}
+              </dd>
             </div>
-          </div>
-        </div>
+          </dl>
+        </SectionCard>
 
-        {/* Project Info */}
         {project && (
-          <div className="p-4 rounded-md bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-200 border border-gray-300 dark:border-zinc-800 ">
-            <p className="text-xl font-medium mb-4">Project Details</p>
-            <h2 className="text-gray-900 dark:text-zinc-100 flex items-center gap-2">
-              {" "}
-              <PenIcon className="size-4" /> {project.name}
+          <SectionCard title="Project" icon={FolderOpen} bodyClassName="p-5">
+            <h2 className="text-[14px] font-bold text-slate-900">
+              {project.name}
             </h2>
-            <p className="text-xs mt-3">
-              Project Start Date:{" "}
-              {project.start_date
-                ? format(new Date(project.start_date), "dd MMM yyyy")
-                : "—"}
-            </p>
-            <div className="flex flex-wrap gap-4 text-sm text-gray-500 dark:text-zinc-400 mt-3">
-              <span>Status: {project.status}</span>
-              <span>Priority: {project.priority}</span>
-              <span>Progress: {project.progress}%</span>
+
+            <div className="flex flex-wrap gap-1.5 mt-2.5">
+              <Badge
+                variant={PROJECT_STATUS_TONE[project.status] || "default"}
+                size="sm"
+              >
+                {formatEnumLabel(project.status)}
+              </Badge>
+              <Badge
+                variant={PRIORITY_TONE[project.priority] || "default"}
+                size="sm"
+              >
+                {formatEnumLabel(project.priority)}
+              </Badge>
             </div>
-          </div>
+
+            {project.start_date && (
+              <p className="mt-4 text-[11px] text-slate-400">
+                Started {format(new Date(project.start_date), "dd MMM yyyy")}
+              </p>
+            )}
+          </SectionCard>
         )}
       </div>
     </div>

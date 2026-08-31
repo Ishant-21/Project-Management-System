@@ -12,8 +12,8 @@ api.interceptors.request.use((config) => {
       config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${token}`;
     }
-  } catch (e) {
-    // ignore
+  } catch {
+    // localStorage can throw in private/blocked contexts — send unauthenticated.
   }
 
   return config;

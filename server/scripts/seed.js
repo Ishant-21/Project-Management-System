@@ -147,7 +147,6 @@ async function main() {
         description: seed.description,
         priority: pick(PRIORITIES),
         status: PROJECT_STATUSES[p % PROJECT_STATUSES.length],
-        progress: randInt(0, 100),
         start_date: daysFromNow(-randInt(20, 90)),
         end_date: daysFromNow(randInt(20, 90)),
         team_lead: admin.id,
